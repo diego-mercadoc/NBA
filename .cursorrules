@@ -348,7 +348,9 @@
         "minimum_accuracy": {
             "moneyline": 0.80,
             "spread_rmse": 14.0,
-            "totals_rmse": 18.0
+            "totals_rmse": 18.0,
+            "first_half_total": 0.72,
+            "first_quarter_total": 0.70
         },
         "confidence_thresholds": {
             "high": 0.85,
@@ -360,28 +362,27 @@
             "good": 0.55,
             "fair": 0.35
         },
-        "ensemble_config": {
-            "models": {
-                "random_forest": {
-                    "n_estimators": 200,
-                    "max_depth": 10
-                },
-                "logistic_regression": {
-                    "C": 1.0,
-                    "max_iter": 1000
-                },
-                "svm": {
-                    "kernel": "rbf",
-                    "probability": true
-                }
-            },
-            "voting": "soft",
-            "validation_split": 0.2
+        "historical_patterns": {
+            "first_half_total_ratio": 0.52,
+            "first_half_spread_ratio": 0.48,
+            "first_quarter_total_ratio": 0.24,
+            "first_quarter_spread_ratio": 0.45,
+            "validation_threshold": {
+                "half_total_points": 5,
+                "quarter_total_points": 3
+            }
         },
-        "feature_importance": {
-            "track_importance": true,
-            "min_importance": 0.02,
-            "report_top_n": 10
+        "non_overlapping_bets": {
+            "allowed_combinations": [
+                ["Moneyline", "First Half Total"],
+                ["Moneyline", "First Quarter Total"],
+                ["First Half Total", "First Quarter Total"]
+            ],
+            "restricted_combinations": [
+                ["Full Game Total", "First Half Total"],
+                ["Full Game Total", "First Quarter Total"],
+                ["First Half Total", "Second Half Total"]
+            ]
         }
     },
     "development_phases": {

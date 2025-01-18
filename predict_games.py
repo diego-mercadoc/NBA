@@ -60,10 +60,41 @@ def main():
                 logging.info(f"\n{pred}")
             
             if not best_bets.empty:
-                logging.info("\nRecommended Bets (65%+ confidence):")
-                for _, bet in best_bets.iterrows():
-                    logging.info(f"\n{bet['Formatted_Predictions']}")
-                    logging.info(f"Value Rating: {bet['Value_Rating']:.3f}")
+                logging.info("\nRecommended Non-Overlapping Parlays (65%+ confidence):")
+                
+                # Group bets by game
+                game_groups = best_bets.groupby('Game')
+                
+                # Find non-overlapping combinations
+                parlay_options = []
+                for game1, bets1 in game_groups:
+                    for game2, bets2 in game_groups:
+                        if game1 < game2:  # Avoid duplicates
+                            for _, bet1 in bets1.iterrows():
+                                for _, bet2 in bets2.iterrows():
+                                    # Check if bet types are allowed together
+                                    if [bet1['Bet_Type'], bet2['Bet_Type']] in [
+                                        ["Moneyline", "First Half Total"],
+                                        ["Moneyline", "First Quarter Total"],
+                                        ["First Half Total", "First Quarter Total"]
+                                    ]:
+                                        parlay = {
+                                            'bets': [
+                                                f"{bet1['Game']}: {bet1['Bet_Type']} - {bet1['Prediction']} ({bet1['Confidence']*100:.1f}%)",
+                                                f"{bet2['Game']}: {bet2['Bet_Type']} - {bet2['Prediction']} ({bet2['Confidence']*100:.1f}%)"
+                                            ],
+                                            'combined_value': (bet1['Value_Rating'] + bet2['Value_Rating']) / 2
+                                        }
+                                        parlay_options.append(parlay)
+                
+                # Sort parlays by combined value
+                parlay_options.sort(key=lambda x: x['combined_value'], reverse=True)
+                
+                # Display top 5 parlay options
+                for i, parlay in enumerate(parlay_options[:5], 1):
+                    logging.info(f"\nParlay Option {i} (Value: {parlay['combined_value']:.3f}):")
+                    for bet in parlay['bets']:
+                        logging.info(f"  {bet}")
             else:
                 logging.info("\nNo high-confidence bets found for today's games")
             
