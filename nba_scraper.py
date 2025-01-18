@@ -8,6 +8,7 @@ import logging
 import requests
 from requests.exceptions import RequestException, HTTPError
 import json  # Add at top with other imports
+from io import StringIO
 
 # Configure logging
 logging.basicConfig(
@@ -112,7 +113,7 @@ class NBADataScraper:
             # Reduced delay after successful request (0.5-1 seconds)
             time.sleep(random.uniform(0.5, 1))
             
-            dfs = pd.read_html(response.text)
+            dfs = pd.read_html(StringIO(response.text))
             return dfs
         except (requests.exceptions.RequestException, HTTPError) as e:
             # Base wait time with randomization
@@ -402,16 +403,16 @@ class NBADataScraper:
             
             try:
                 season_games = self.get_season_games(season)
-                if season_games is not None:
-                    all_games.extend(season_games)
+                if season_games is not None and isinstance(season_games, pd.DataFrame):
+                    all_games.append(season_games)
                     
-                if not recent_only:
-                    self.progress['completed_seasons'].append(season)
-                    self.save_progress()
+                    if not recent_only:
+                        self.progress['completed_seasons'].append(season)
+                        self.save_progress()
                 
                 # Add cooldown between seasons
                 if season != seasons[-1]:
-                    cooldown = random.uniform(60, 120)
+                    cooldown = random.uniform(1, 2)  # Reduced from previous values
                     logging.info(f"Season complete - cooling down for {cooldown:.2f} seconds")
                     time.sleep(cooldown)
                     
@@ -421,7 +422,13 @@ class NBADataScraper:
                 self.save_progress()
                 raise e
         
-        return pd.concat(all_games, ignore_index=True) if all_games else None
+        if all_games:
+            try:
+                return pd.concat(all_games, ignore_index=True)
+            except Exception as e:
+                logging.error(f"Error concatenating game data: {str(e)}")
+                return None
+        return None
 
     def get_season_games(self, season):
         """
@@ -1260,6 +1267,7 @@ def main():
             return
         
         # Get team stats only if needed
+        team_stats = None  # Initialize to None
         try:
             existing_stats = pd.read_csv('nba_team_stats_all.csv')
             if 2025 not in existing_stats['Season'].unique():
@@ -1288,42 +1296,6 @@ def main():
                 logging.info(f"Season {season}: {count} teams")
                 if count != 30 and season != 2025:  # Current season might be incomplete
                     logging.warning(f"Unexpected number of teams in season {season}: {count} (expected 30)")
-        
-        # Get current betting lines
-        logging.info("\nScraping current betting lines...")
-        current_lines = scraper.get_closing_lines()
-        if current_lines is not None:
-            logging.info("Saving current betting lines...")
-            current_lines.to_csv('current_betting_lines.csv', index=False)
-            
-            # Process predictions with current lines
-            upcoming_games = current_lines[['Date', 'Home_Team', 'Away_Team']].copy()
-            pred_df = scraper.predict_upcoming_games(upcoming_games)
-            
-            if pred_df is not None:
-                # Merge predictions with betting lines
-                pred_df = pred_df.merge(
-                    current_lines,
-                    on=['Date', 'Home_Team', 'Away_Team'],
-                    how='left'
-                )
-                
-                logging.info("Saving prediction data...")
-                pred_df.to_csv('upcoming_games_predictions.csv', index=False)
-                
-                # Display key metrics and betting lines for each matchup
-                for _, game in pred_df.iterrows():
-                    logging.info(f"\nMatchup: {game['Away_Team']} @ {game['Home_Team']} ({game['Date']})")
-                    
-                    # Team Form
-                    logging.info(f"Home team last 10: {game['Home_Last10_Wins']:.0f} wins")
-                    logging.info(f"Away team last 10: {game['Away_Last10_Wins']:.0f} wins")
-                    
-                    # Betting Lines
-                    if 'Home_Spread' in game:
-                        logging.info(f"Spread: {game['Home_Team']} {game['Home_Spread']:+.1f}")
-                    if 'Total_Line' in game:
-                        logging.info(f"Total: {game['Total_Line']:.1f}")
         
         logging.info("\nNBA data scraping process completed successfully")
         

@@ -17,27 +17,49 @@
     "data_validation": {
         "expected_games": {
             "regular": 1230,
-            "covid_season": 1080
+            "covid_season": 1080,
+            "current_season_minimum": 500
         },
         "required_columns": [
             "Date", "Away_Team", "Home_Team", "Away_Points", "Home_Points",
             "Season", "Month", "Is_Future", "Is_Scheduled", "Is_Played"
-        ]
+        ],
+        "data_types": {
+            "Date": "datetime64[ns]",
+            "Points": "float64",
+            "Is_Future": "boolean"
+        }
     },
     "rate_limits": {
         "base_wait": 0.5,
         "jitter_range": [0, 1],
-        "cooldown_between_months": [1, 2]
+        "cooldown_between_months": [1, 2],
+        "cooldown_between_seasons": [1, 2]
     },
     "team_names": {
         "normalize": true,
         "mapping_file": "team_name_map in nba_scraper.py"
+    },
+    "error_handling": {
+        "retry_strategy": {
+            "max_retries": 5,
+            "exponential_backoff": true,
+            "jitter": "10% of base wait time"
+        },
+        "data_validation": {
+            "check_dataframe_types": true,
+            "validate_before_concat": true,
+            "handle_missing_data": true
+        }
     },
     "context_rules": [
         "Always validate season transitions (Oct-Jun spans two years)",
         "Handle current season's scheduled vs unscheduled games",
         "Maintain data accuracy while optimizing scraping speed",
         "Keep progress tracking updated for resume capability",
-        "Consider betting implications for data quality"
+        "Consider betting implications for data quality",
+        "Validate DataFrame types before concatenation",
+        "Handle HTTP 404 errors gracefully for missing months",
+        "Track both successful and failed scraping attempts"
     ]
 } 
