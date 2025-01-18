@@ -1,0 +1,43 @@
+{
+    "project_type": "nba_data_scraper",
+    "language": "python",
+    "main_files": {
+        "scraper": "nba_scraper.py",
+        "data": ["nba_games_all.csv", "nba_team_stats_all.csv"],
+        "progress": "scraper_progress.json"
+    },
+    "season_handling": {
+        "current_season": "2024-25",
+        "season_format": "YYYY represents end year (e.g., 2025 = 2024-25 season)",
+        "special_cases": {
+            "2020-21": "COVID season (December start)",
+            "current": "Games scheduled through April 13, 2025"
+        }
+    },
+    "data_validation": {
+        "expected_games": {
+            "regular": 1230,
+            "covid_season": 1080
+        },
+        "required_columns": [
+            "Date", "Away_Team", "Home_Team", "Away_Points", "Home_Points",
+            "Season", "Month", "Is_Future", "Is_Scheduled", "Is_Played"
+        ]
+    },
+    "rate_limits": {
+        "base_wait": 0.5,
+        "jitter_range": [0, 1],
+        "cooldown_between_months": [1, 2]
+    },
+    "team_names": {
+        "normalize": true,
+        "mapping_file": "team_name_map in nba_scraper.py"
+    },
+    "context_rules": [
+        "Always validate season transitions (Oct-Jun spans two years)",
+        "Handle current season's scheduled vs unscheduled games",
+        "Maintain data accuracy while optimizing scraping speed",
+        "Keep progress tracking updated for resume capability",
+        "Consider betting implications for data quality"
+    ]
+} 
