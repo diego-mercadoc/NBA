@@ -1,6 +1,55 @@
 # NBA Data Scraper with Betting Insights
 
-A Python-based NBA data scraper and prediction system that collects game data and generates betting insights.
+A Python-based NBA data scraper and prediction system that collects game data and generates betting insights using ensemble machine learning models.
+
+## Model Performance
+
+Latest model metrics (as of January 18, 2025):
+- Moneyline Accuracy: 80.0%
+- Spread RMSE: 15.155
+- Totals RMSE: 14.435
+
+### Prediction Types
+- **Moneyline**: Game winner predictions with confidence scores
+- **Spread**: Point spread predictions for full game
+- **Totals**: Over/under predictions for full game
+- **First Half**: Spread and total predictions (52% of full game total)
+- **First Quarter**: Spread and total predictions (24% of full game total)
+
+### Enhanced Features
+- Ensemble learning combining Random Forest, XGBoost, and LightGBM models
+- Advanced feature engineering including win rates, streaks, and rest days
+- Non-overlapping parlay suggestions with value ratings
+- Confidence-based bet filtering (minimum 75% confidence)
+- Value rating system incorporating form, rest advantage, and streaks
+
+## Recent Updates
+- Implemented ensemble model for improved prediction accuracy
+- Enhanced feature engineering with interaction features
+- Added first half and first quarter predictions
+- Improved value rating calculations
+- Enhanced error handling and NaN value processing
+
+## Development Roadmap
+1. **Data Quality & Storage** (In Progress)
+   - ✓ Basic game scraping
+   - ✓ Enhanced prediction models
+   - ⚡ Team stats improvements
+   
+2. **Enhanced Data Integration** (Planned)
+   - Injury data integration
+   - Real-time odds tracking
+   - Player statistics integration
+
+3. **Advanced Analytics** (Planned)
+   - Quarter-by-quarter predictions
+   - Player prop predictions
+   - Advanced betting metrics
+
+4. **Production Infrastructure** (Planned)
+   - Automated updates
+   - Performance monitoring
+   - API development
 
 ### Features
 
