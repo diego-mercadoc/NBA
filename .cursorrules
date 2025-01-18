@@ -4,7 +4,84 @@
     "main_files": {
         "scraper": "nba_scraper.py",
         "data": ["nba_games_all.csv", "nba_team_stats_all.csv"],
-        "progress": "scraper_progress.json"
+        "progress": "scraper_progress.json",
+        "docs": ["README.md", "LICENSE"]
+    },
+    "future_enhancements": {
+        "development_phases": {
+            "phase1": {
+                "name": "Data Quality & Storage",
+                "status": "in_progress",
+                "priorities": {
+                    "high": {
+                        "fix_team_stats": {
+                            "issue": "table_format_error",
+                            "season": "2025",
+                            "approach": "alternative_source"
+                        },
+                        "verify_quarter_stats": {
+                            "check_availability": true,
+                            "fallback_plan": "remove_if_unreliable"
+                        }
+                    },
+                    "medium": {
+                        "postgresql_migration": {
+                            "tables": ["games", "team_stats", "player_stats"],
+                            "indexes": ["date", "team", "season"],
+                            "backup_csvs": true
+                        }
+                    }
+                }
+            },
+            "phase2": {
+                "name": "Enhanced Data Integration",
+                "status": "planned",
+                "components": {
+                    "injury_data": {
+                        "sources": ["espn", "rotoworld"],
+                        "update_frequency": "daily",
+                        "required_fields": ["player", "status", "details", "return_date"]
+                    },
+                    "betting_odds": {
+                        "source": "oddsportal",
+                        "markets": ["moneyline", "spreads", "totals"],
+                        "update_frequency": "hourly"
+                    },
+                    "player_mapping": {
+                        "source": "basketball_reference",
+                        "format": "lastname5_firstname2_01",
+                        "update_frequency": "weekly"
+                    }
+                }
+            },
+            "phase3": {
+                "name": "Advanced Analytics",
+                "status": "planned",
+                "components": {
+                    "machine_learning": {
+                        "models": ["classification", "regression"],
+                        "features": ["team_stats", "rest_days", "travel_fatigue"]
+                    },
+                    "betting_metrics": {
+                        "types": ["roi", "kelly_criterion", "sharp_money"]
+                    }
+                }
+            },
+            "phase4": {
+                "name": "Production Infrastructure",
+                "status": "planned",
+                "components": {
+                    "automated_updates": {
+                        "frequency": "daily",
+                        "time": "00:00 UTC"
+                    },
+                    "monitoring": {
+                        "metrics": ["data_freshness", "scraping_success", "error_rates"],
+                        "alerts": ["email", "logging"]
+                    }
+                }
+            }
+        }
     },
     "season_handling": {
         "current_season": "2024-25",
@@ -12,13 +89,37 @@
         "special_cases": {
             "2020-21": "COVID season (December start)",
             "current": "Games scheduled through April 13, 2025"
+        },
+        "validation": {
+            "check_season_transitions": true,
+            "validate_month_year_mapping": true,
+            "minimum_games_warning": {
+                "2021": 1000,
+                "2022": 1200,
+                "2023": 1200,
+                "2024": 50,
+                "2025": 50
+            }
         }
     },
     "data_validation": {
         "expected_games": {
             "regular": 1230,
             "covid_season": 1080,
-            "current_season_minimum": 500
+            "current_season_minimum": 500,
+            "validate_per_month": true,
+            "season_specific_counts": {
+                "2021": {"count": 1163, "status": "complete", "type": "covid"},
+                "2022": {"count": 1323, "status": "complete", "type": "regular"},
+                "2023": {"count": 1320, "status": "complete", "type": "regular"},
+                "2024": {"count": 54, "status": "partial", "type": "regular"},
+                "2025": {"count": 71, "status": "in_progress", "type": "regular"}
+            },
+            "data_freshness": {
+                "max_days_old": 79,
+                "warning_threshold": 60,
+                "critical_threshold": 75
+            }
         },
         "required_columns": [
             "Date", "Away_Team", "Home_Team", "Away_Points", "Home_Points",
@@ -27,29 +128,128 @@
         "data_types": {
             "Date": "datetime64[ns]",
             "Points": "float64",
-            "Is_Future": "boolean"
+            "Is_Future": "boolean",
+            "Is_Scheduled": "boolean",
+            "Is_Played": "boolean"
+        },
+        "duplicate_handling": {
+            "check_before_concat": true,
+            "keep_strategy": "first",
+            "log_duplicates": true
+        },
+        "team_stats_validation": {
+            "early_season_handling": {
+                "retry_with_monthly": true,
+                "minimum_games_required": 5,
+                "fallback_to_previous": true,
+                "known_issues": {
+                    "2025": {
+                        "table_format_error": true,
+                        "alternative_source_needed": true,
+                        "minimum_data_required": false,
+                        "error_details": {
+                            "type": "pandas_read_error",
+                            "message": "arg must be a list, tuple, 1-d array, or Series",
+                            "resolution_steps": [
+                                "verify_table_exists",
+                                "check_table_structure",
+                                "try_alternative_parser",
+                                "fallback_to_monthly_stats"
+                            ]
+                        }
+                    }
+                }
+            },
+            "table_format_checks": {
+                "verify_columns": true,
+                "handle_missing_tables": true,
+                "log_format_changes": true,
+                "required_stats": [
+                    "ORtg", "DRtg", "Pace", "SRS",
+                    "eFG_Pct", "TOV_Pct", "ORB_Pct", "FT_Rate"
+                ],
+                "alternative_tables": [
+                    "misc_stats",
+                    "per_game_stats",
+                    "advanced_stats"
+                ],
+                "parsing_options": {
+                    "try_all_tables": true,
+                    "handle_multiindex": true,
+                    "clean_column_names": true
+                }
+            }
+        },
+        "immediate_priorities": {
+            "fix_team_stats": {
+                "priority": "high",
+                "affected_season": "2025",
+                "required_actions": [
+                    "handle_table_format_changes",
+                    "implement_alternative_source",
+                    "add_partial_season_validation"
+                ]
+            },
+            "verify_quarter_stats": {
+                "priority": "medium",
+                "check_availability": true,
+                "consider_removal": true
+            }
         }
     },
     "rate_limits": {
         "base_wait": 0.5,
-        "jitter_range": [0, 1],
-        "cooldown_between_months": [1, 2],
-        "cooldown_between_seasons": [1, 2]
+        "random_jitter": [0, 1],
+        "cooldown_between_seasons": [1, 2],
+        "cooldown_between_months": [1, 2]
     },
     "team_names": {
         "normalize": true,
-        "mapping_file": "team_name_map in nba_scraper.py"
+        "mapping_file": "team_name_map in nba_scraper.py",
+        "validate_mapping": true
     },
     "error_handling": {
         "retry_strategy": {
-            "max_retries": 5,
-            "exponential_backoff": true,
-            "jitter": "10% of base wait time"
+            "max_attempts": 5,
+            "backoff_factor": 2,
+            "jitter_range": [0, 1]
         },
         "data_validation": {
             "check_dataframe_types": true,
             "validate_before_concat": true,
-            "handle_missing_data": true
+            "handle_missing_data": true,
+            "validate_team_names": true,
+            "handle_incomplete_stats": true,
+            "early_season_stats": {
+                "detect_table_changes": true,
+                "use_alternative_source": true,
+                "log_missing_data": true
+            }
+        },
+        "http_errors": {
+            "handle_404": true,
+            "handle_rate_limit": true,
+            "handle_server_errors": true
+        },
+        "team_stats_2025": {
+            "error_type": "pandas_read_error",
+            "message": "arg must be a list, tuple, 1-d array, or Series",
+            "resolution_steps": [
+                "verify_table_exists",
+                "check_table_structure",
+                "try_alternative_parser",
+                "fallback_to_monthly"
+            ],
+            "alternative_tables": [
+                "misc_stats",
+                "per_game_stats",
+                "advanced_stats"
+            ],
+            "parsing_options": {
+                "try_all_tables": true,
+                "handle_multiindex": true,
+                "clean_column_names": true
+            }
         }
     },
     "context_rules": [
@@ -60,6 +260,147 @@
         "Consider betting implications for data quality",
         "Validate DataFrame types before concatenation",
         "Handle HTTP 404 errors gracefully for missing months",
-        "Track both successful and failed scraping attempts"
-    ]
+        "Track both successful and failed scraping attempts",
+        "Validate team names across all data sources",
+        "Log all rate limiting and cooldown events",
+        "Ensure proper handling of future games",
+        "Maintain data consistency across files",
+        "Handle incomplete team stats gracefully",
+        "Track actual game counts per season"
+    ],
+    "logging": {
+        "level": "INFO",
+        "file": "nba_scraper.log",
+        "format": "%(asctime)s - %(levelname)s - %(message)s",
+        "log_to_console": true,
+        "log_to_file": true,
+        "track_stats": {
+            "games_per_season": true,
+            "error_frequency": true,
+            "scraping_duration": true
+        }
+    },
+    "data_validation": {
+        "team_stats": {
+            "expected_teams_per_season": 30,
+            "required_columns": [
+                "Team", "Season", "Wins", "Losses", 
+                "ORtg", "DRtg", "Pace", "SRS",
+                "eFG_Pct", "TOV_Pct", "ORB_Pct", "FT_Rate"
+            ],
+            "column_handling": {
+                "multi_index": {
+                    "enabled": true,
+                    "four_factors_prefix": true,
+                    "skip_unnamed": true
+                }
+            }
+        }
+    },
+    "known_issues": {
+        "2025": {
+            "team_stats": {
+                "status": "fixed",
+                "description": "Multi-index column handling improved to correctly process Four Factors stats",
+                "resolution_date": "2025-01-18"
+            }
+        }
+    },
+    "development_phases": {
+        "phase1": {
+            "name": "Data Quality & Storage",
+            "status": "in_progress",
+            "tasks": {
+                "basic_game_scraping": "completed",
+                "fix_team_stats_2025": "in_progress",
+                "data_validation": "in_progress"
+            }
+        },
+        "phase2": {
+            "name": "Enhanced Data Integration",
+            "status": "planned",
+            "components": {
+                "injury_data": "pending",
+                "betting_odds": "pending",
+                "player_mapping": "pending"
+            }
+        },
+        "phase3": {
+            "name": "Advanced Analytics",
+            "status": "planned",
+            "features": {
+                "ml_enhancements": "pending",
+                "real_time_updates": "pending",
+                "betting_metrics": "pending"
+            }
+        },
+        "phase4": {
+            "name": "Production Infrastructure",
+            "status": "planned",
+            "components": {
+                "automated_updates": "pending",
+                "monitoring": "pending",
+                "api": "pending"
+            }
+        }
+    },
+    "model_validation": {
+        "minimum_accuracy": {
+            "moneyline": 0.80,
+            "spread_rmse": 14.0,
+            "totals_rmse": 18.0
+        },
+        "confidence_thresholds": {
+            "high": 0.85,
+            "medium": 0.75,
+            "low": 0.65
+        },
+        "value_ratings": {
+            "excellent": 0.75,
+            "good": 0.55,
+            "fair": 0.35
+        },
+        "ensemble_config": {
+            "models": {
+                "random_forest": {
+                    "n_estimators": 200,
+                    "max_depth": 10
+                },
+                "logistic_regression": {
+                    "C": 1.0,
+                    "max_iter": 1000
+                },
+                "svm": {
+                    "kernel": "rbf",
+                    "probability": true
+                }
+            },
+            "voting": "soft",
+            "validation_split": 0.2
+        },
+        "feature_importance": {
+            "track_importance": true,
+            "min_importance": 0.02,
+            "report_top_n": 10
+        }
+    },
+    "development_phases": {
+        "phase3": {
+            "name": "Advanced Analytics",
+            "status": "in_progress",
+            "features": {
+                "ml_enhancements": {
+                    "status": "completed",
+                    "changes": [
+                        "Implemented ensemble model for moneyline predictions",
+                        "Enhanced feature engineering",
+                        "Improved value rating calculation",
+                        "Added rest days impact analysis"
+                    ]
+                },
+                "real_time_updates": "pending",
+                "betting_metrics": "pending"
+            }
+        }
+    }
 } 

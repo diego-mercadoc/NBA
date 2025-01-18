@@ -548,60 +548,61 @@ class NBADataScraper:
             
         Returns:
             pd.DataFrame: DataFrame with team stats if successful, None otherwise
-            
-        Stats include:
-        - Basic: Wins, Losses
-        - Advanced: ORtg, DRtg, Pace, SRS
-        - Four Factors: eFG%, TOV%, ORB%, FT/FGA
-        - Quarter/Half Performance:
-          * First Half scoring trends
-          * Quarter-by-quarter scoring
-          * Strong/weak periods
         """
         url = f"https://www.basketball-reference.com/leagues/NBA_{season}.html"
         try:
             logging.info(f"Fetching team stats from {url}")
             dfs = self._make_request(url)
             
-            # The advanced stats are in table 10
-            if len(dfs) > 10:
-                df = dfs[10]
+            # Debug logging
+            logging.info(f"Found {len(dfs)} tables on the page")
+            
+            # Try to find the advanced stats table
+            advanced_stats_table = None
+            for i, df in enumerate(dfs):
+                if isinstance(df.columns, pd.MultiIndex):
+                    # For multi-index columns, check second level if it exists
+                    col_names = [col[1] if isinstance(col, tuple) else col for col in df.columns]
+                else:
+                    col_names = df.columns
                 
-                # Clean up the column names
-                df.columns = [col[1] if isinstance(col, tuple) else col for col in df.columns]
+                if 'ORtg' in col_names or 'DRtg' in col_names:
+                    logging.info(f"Found advanced stats in table {i}")
+                    advanced_stats_table = df
+                    break
+            
+            if advanced_stats_table is not None:
+                df = advanced_stats_table
                 
-                # Rename the columns we want
+                # Handle multi-index columns
+                if isinstance(df.columns, pd.MultiIndex):
+                    # For columns that are part of 'Offense Four Factors' or 'Defense Four Factors'
+                    # use both levels, otherwise just use the second level
+                    df.columns = [
+                        f"{col[0]}_{col[1]}" if 'Four Factors' in str(col[0]) else col[1]
+                        for col in df.columns
+                    ]
+                
+                # Debug logging
+                logging.info(f"Processed columns: {df.columns.tolist()}")
+                
+                # Map the columns we want
                 col_map = {
                     'Team': 'Team',
+                    'W': 'Wins',
+                    'L': 'Losses',
                     'ORtg': 'ORtg',
                     'DRtg': 'DRtg',
                     'Pace': 'Pace',
-                    'W': 'Wins',
-                    'L': 'Losses',
                     'SRS': 'SRS',
-                    'eFG%': 'eFG_Pct',
-                    'TOV%': 'TOV_Pct',
-                    'ORB%': 'ORB_Pct',
-                    'FT/FGA': 'FT_Rate'
+                    'Offense Four Factors_eFG%': 'eFG_Pct',
+                    'Offense Four Factors_TOV%': 'TOV_Pct',
+                    'Offense Four Factors_ORB%': 'ORB_Pct',
+                    'Offense Four Factors_FT/FGA': 'FT_Rate'
                 }
                 
-                # Map the actual column names to our desired names
-                actual_cols = {
-                    'Team': [col for col in df.columns if 'Team' in col][0],
-                    'ORtg': [col for col in df.columns if 'ORtg' in col][0],
-                    'DRtg': [col for col in df.columns if 'DRtg' in col][0],
-                    'Pace': [col for col in df.columns if 'Pace' in col][0],
-                    'W': [col for col in df.columns if col.endswith('W')][0],
-                    'L': [col for col in df.columns if col.endswith('L')][0],
-                    'SRS': [col for col in df.columns if 'SRS' in col][0],
-                    'eFG%': [col for col in df.columns if 'eFG%' in col][0],
-                    'TOV%': [col for col in df.columns if 'TOV%' in col][0],
-                    'ORB%': [col for col in df.columns if 'ORB%' in col][0],
-                    'FT/FGA': [col for col in df.columns if 'FT/FGA' in col][0]
-                }
-                
-                rename_map = {actual_cols[old]: new for old, new in col_map.items()}
-                df = df.rename(columns=rename_map)
+                # Rename columns
+                df = df.rename(columns=col_map)
                 
                 # Remove League Average and duplicate rows
                 df = df[~df['Team'].str.contains('League Average|Division', na=False)]
@@ -618,26 +619,25 @@ class NBADataScraper:
                     'ORtg', 'DRtg', 'Pace', 'SRS',
                     'eFG_Pct', 'TOV_Pct', 'ORB_Pct', 'FT_Rate'
                 ]
+                
+                # Only keep columns that exist
+                keep_cols = [col for col in keep_cols if col in df.columns]
                 df = df[keep_cols]
                 
                 # Convert numeric columns
-                numeric_cols = [
-                    'Wins', 'Losses', 'ORtg', 'DRtg', 'Pace', 'SRS',
-                    'eFG_Pct', 'TOV_Pct', 'ORB_Pct', 'FT_Rate'
-                ]
+                numeric_cols = [col for col in keep_cols if col not in ['Team', 'Season']]
                 for col in numeric_cols:
                     df[col] = pd.to_numeric(df[col], errors='coerce')
-                
-                # Add quarter and half performance stats
-                df = self.add_quarter_stats(df, season)
                 
                 logging.info(f"Successfully scraped team stats for season {season}")
                 return df
             
-            logging.warning(f"Could not find team stats table at {url}")
+            logging.warning(f"Could not find advanced stats table at {url}")
             return None
+            
         except Exception as e:
             logging.error(f"Error scraping team stats for {season}: {str(e)}")
+            logging.error(f"Error details: {str(e.__class__.__name__)}")
             return None
 
     def add_quarter_stats(self, df, season):
@@ -1109,28 +1109,123 @@ class NBADataScraper:
         """
         try:
             current_date = datetime.now()
-            games_df = pd.read_csv('nba_games_all.csv')
-            games_df['Date'] = pd.to_datetime(games_df['Date'])
+            # For NBA season, if we're in Oct-Dec, we're in the next year's season
+            season = current_date.year + 1 if current_date.month >= 10 else current_date.year
+            month = current_date.strftime('%B').lower()
             
-            # Get games for today or future games
-            future_games = games_df[games_df['Date'] >= current_date].sort_values('Date')
+            # Try to get games directly from the website
+            url = f"https://www.basketball-reference.com/leagues/NBA_{season}_games-{month}.html"
+            logging.info(f"Fetching current games from {url}")
             
-            if not future_games.empty:
-                next_game_date = future_games.iloc[0]['Date'].date()
-                today_games = future_games[future_games['Date'].dt.date == next_game_date]
+            dfs = self._make_request(url)
+            if dfs and len(dfs) > 0:
+                df = dfs[0]
+                df['Date'] = pd.to_datetime(df['Date'])
+                
+                # Get today's games
+                today_games = df[df['Date'].dt.date == current_date.date()].copy()
                 
                 if not today_games.empty:
-                    logging.info(f"\nGames for {next_game_date}:")
+                    # Clean column names
+                    today_games.rename(columns={
+                        'Visitor/Neutral': 'Away_Team',
+                        'Home/Neutral': 'Home_Team',
+                        'PTS': 'Away_Points',
+                        'PTS.1': 'Home_Points'
+                    }, inplace=True)
+                    
+                    # Add necessary columns
+                    today_games['Season'] = season
+                    today_games['Is_Future'] = True
+                    today_games['Is_Scheduled'] = True
+                    
+                    # Normalize team names
+                    today_games['Away_Team'] = today_games['Away_Team'].replace(self.team_name_map)
+                    today_games['Home_Team'] = today_games['Home_Team'].replace(self.team_name_map)
+                    
+                    # Calculate rest days and streaks
+                    games_df = pd.read_csv('nba_games_all.csv')
+                    games_df['Date'] = pd.to_datetime(games_df['Date'])
+                    
+                    # Add rest days
+                    for team_type in ['Home', 'Away']:
+                        rest_days = []
+                        for team in today_games[f'{team_type}_Team']:
+                            last_game = games_df[
+                                (games_df[f'{team_type}_Team'] == team) |
+                                (games_df[f'{"Away" if team_type == "Home" else "Home"}_Team'] == team)
+                            ]['Date'].max()
+                            
+                            if pd.notnull(last_game):
+                                days = (current_date - last_game).days
+                            else:
+                                days = 7  # Default to a week if no previous games
+                            rest_days.append(days)
+                        today_games[f'{team_type}_Rest_Days'] = rest_days
+                    
+                    # Add streaks and rolling stats
+                    for team_type in ['Home', 'Away']:
+                        streaks = []
+                        rolling_stats = {
+                            'Points_Scored': [],
+                            'Points_Allowed': [],
+                            'Point_Diff': []
+                        }
+                        
+                        for team in today_games[f'{team_type}_Team']:
+                            # Get team's recent games
+                            team_games = games_df[
+                                (games_df[f'{team_type}_Team'] == team) |
+                                (games_df[f'{"Away" if team_type == "Home" else "Home"}_Team'] == team)
+                            ].sort_values('Date').tail(10)
+                            
+                            # Calculate streak
+                            if not team_games.empty:
+                                current_streak = 0
+                                for _, row in team_games.iterrows():
+                                    if row[f'{team_type}_Team'] == team:
+                                        won = row['Home_Win'] == 1 if team_type == 'Home' else row['Home_Win'] == 0
+                                    else:
+                                        won = row['Home_Win'] == 0 if team_type == 'Home' else row['Home_Win'] == 1
+                                    
+                                    if won:
+                                        current_streak = current_streak + 1 if current_streak > 0 else 1
+                                    else:
+                                        current_streak = current_streak - 1 if current_streak < 0 else -1
+                                streaks.append(current_streak)
+                                
+                                # Calculate rolling stats (last 5 games)
+                                last_5 = team_games.tail(5)
+                                if team_type == 'Home':
+                                    points_scored = last_5[last_5['Home_Team'] == team]['Home_Points'].mean()
+                                    points_allowed = last_5[last_5['Home_Team'] == team]['Away_Points'].mean()
+                                else:
+                                    points_scored = last_5[last_5['Away_Team'] == team]['Away_Points'].mean()
+                                    points_allowed = last_5[last_5['Away_Team'] == team]['Home_Points'].mean()
+                                
+                                rolling_stats['Points_Scored'].append(points_scored)
+                                rolling_stats['Points_Allowed'].append(points_allowed)
+                                rolling_stats['Point_Diff'].append(points_scored - points_allowed)
+                            else:
+                                streaks.append(0)
+                                for stat in rolling_stats:
+                                    rolling_stats[stat].append(0)
+                        
+                        today_games[f'{team_type}_Streak'] = streaks
+                        for stat, values in rolling_stats.items():
+                            today_games[f'{team_type}_{stat}_Roll5'] = values
+                    
+                    logging.info(f"\nGames for {current_date.date()}:")
                     for _, game in today_games.iterrows():
                         logging.info(f"\n{game['Away_Team']} @ {game['Home_Team']}")
                         logging.info(f"Home Streak: {game['Home_Streak']}, Away Streak: {game['Away_Streak']}")
                         logging.info(f"Home L5 Point Diff: {game['Home_Point_Diff_Roll5']:.1f}")
                         logging.info(f"Away L5 Point Diff: {game['Away_Point_Diff_Roll5']:.1f}")
+                    
+                    return today_games
                 
-                return today_games
-            else:
-                logging.info("No upcoming games found in the dataset")
-                return None
+            logging.info("No upcoming games found in the dataset")
+            return None
             
         except Exception as e:
             logging.error(f"Error getting current games: {str(e)}")
