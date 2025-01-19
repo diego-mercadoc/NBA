@@ -4,7 +4,7 @@ A Python-based NBA data scraper and prediction system that collects game data an
 
 ## Model Performance
 
-Latest model metrics (as of January 18, 2025):
+Latest model metrics (as of January 19, 2025):
 - Moneyline Accuracy: 80.0%
 - Spread RMSE: 15.155
 - Totals RMSE: 14.435
