@@ -792,46 +792,41 @@ class NBADataScraper:
         """Compute rolling statistics for teams"""
         games_df = games_df.copy()
         
-        # Sort by date
-        games_df.sort_values('Date', inplace=True)
+        # Calculate point differential
+        games_df['Point_Diff'] = games_df.apply(
+            lambda x: x['Home_Points'] - x['Away_Points'] if not pd.isna(x['Home_Points']) else 0, 
+            axis=1
+        )
         
-        # Initialize columns for rolling stats
-        stats = ['Points_Scored', 'Points_Allowed', 'Point_Diff']
-        for stat in stats:
-            games_df[f'Home_{stat}_Roll{window}'] = np.nan
-            games_df[f'Away_{stat}_Roll{window}'] = np.nan
+        # Create masks for home and away games
+        mask_home = ~games_df['Is_Future']
+        mask_away = ~games_df['Is_Future']
         
-        # Compute rolling stats for each team
-        for team in games_df['Home_Team'].unique():
-            # Home games
-            mask_home = games_df['Home_Team'] == team
-            games_df.loc[mask_home, f'Home_Points_Scored_Roll{window}'] = (
-                games_df.loc[mask_home, 'Home_Points']
-                .rolling(window, min_periods=1).mean()
-            )
-            games_df.loc[mask_home, f'Home_Points_Allowed_Roll{window}'] = (
-                games_df.loc[mask_home, 'Away_Points']
-                .rolling(window, min_periods=1).mean()
-            )
-            games_df.loc[mask_home, f'Home_Point_Diff_Roll{window}'] = (
-                games_df.loc[mask_home, 'Point_Diff']
-                .rolling(window, min_periods=1).mean()
-            )
-            
-            # Away games
-            mask_away = games_df['Away_Team'] == team
-            games_df.loc[mask_away, f'Away_Points_Scored_Roll{window}'] = (
-                games_df.loc[mask_away, 'Away_Points']
-                .rolling(window, min_periods=1).mean()
-            )
-            games_df.loc[mask_away, f'Away_Points_Allowed_Roll{window}'] = (
-                games_df.loc[mask_away, 'Home_Points']
-                .rolling(window, min_periods=1).mean()
-            )
-            games_df.loc[mask_away, f'Away_Point_Diff_Roll{window}'] = (
-                -games_df.loc[mask_away, 'Point_Diff']
-                .rolling(window, min_periods=1).mean()
-            )
+        # Calculate rolling stats for home teams
+        home_stats = games_df[mask_home].groupby('Home_Team')['Point_Diff'].rolling(
+            window=window, min_periods=1
+        ).mean().reset_index()
+        home_stats.columns = ['index', 'Home_Team', f'Home_Point_Diff_Roll{window}']
+        
+        # Calculate rolling stats for away teams (negative point diff)
+        away_stats = games_df[mask_away].groupby('Away_Team')['Point_Diff'].rolling(
+            window=window, min_periods=1
+        ).mean().reset_index()
+        away_stats.columns = ['index', 'Away_Team', f'Away_Point_Diff_Roll{window}']
+        
+        # Merge stats back to games dataframe
+        games_df = pd.merge(
+            games_df,
+            home_stats[['Home_Team', f'Home_Point_Diff_Roll{window}']],
+            on='Home_Team',
+            how='left'
+        )
+        games_df = pd.merge(
+            games_df,
+            away_stats[['Away_Team', f'Away_Point_Diff_Roll{window}']],
+            on='Away_Team',
+            how='left'
+        )
         
         return games_df
 

@@ -9,19 +9,46 @@ Latest model metrics (as of January 18, 2025):
 - Spread RMSE: 15.155
 - Totals RMSE: 14.435
 
+### Enhanced Confidence Measures
+- Increased confidence threshold to 90% (from 65%)
+- Minimum value rating requirement of 70%
+- Normalized form factors using tanh transformation
+- Exponential weighting for recent performance
+- Stricter validation for half/quarter predictions
+- Additional confidence boost for strong differentials
+
 ### Prediction Types
-- **Moneyline**: Game winner predictions with confidence scores
+- **Moneyline**: Game winner predictions with enhanced confidence scores
 - **Spread**: Point spread predictions for full game
 - **Totals**: Over/under predictions for full game
 - **First Half**: Spread and total predictions (52% of full game total)
+  - Enhanced validation (±3 points from expected)
+  - Confidence capped at 95%
 - **First Quarter**: Spread and total predictions (24% of full game total)
+  - Tighter validation (±1.5 points from expected)
+  - Confidence capped at 95%
 
 ### Enhanced Features
 - Ensemble learning combining Random Forest, XGBoost, and LightGBM models
-- Advanced feature engineering including win rates, streaks, and rest days
-- Non-overlapping parlay suggestions with value ratings
-- Confidence-based bet filtering (minimum 75% confidence)
-- Value rating system incorporating form, rest advantage, and streaks
+- Season-based weighting for training data
+  - Current season: 1.0x weight
+  - Previous season: 0.8x weight
+  - Earlier seasons: 0.6x weight
+- Advanced feature engineering including:
+  - Win rates with exponential weighting
+  - Normalized form factors
+  - Rest advantage with diminishing returns
+  - Streak impact with momentum consideration
+  - Recent performance weighting (last 3 games)
+- Non-overlapping parlay suggestions with enhanced criteria:
+  - Combined confidence ≥ 90%
+  - Combined value rating ≥ 70%
+- Value rating system incorporating:
+  - Form factor (tanh normalized)
+  - Rest advantage (diminishing returns)
+  - Streak impact (momentum adjusted)
+  - Recent performance boost
+  - Probability margin bonus
 
 ## Recent Updates
 - Implemented ensemble model for improved prediction accuracy
@@ -107,6 +134,54 @@ Predictions include:
 - Confidence levels
 - Enhanced value ratings
 - Non-overlapping parlay suggestions
+
+### Training Data & Model Specifications
+
+#### Dataset Composition
+- Total games: 3,931
+- Seasons covered:
+  - 2021: 1,163 games (complete)
+  - 2022: 1,323 games (complete)
+  - 2023: 1,320 games (complete)
+  - 2024: 54 games (partial)
+  - 2025: 71 games (current)
+
+#### Feature Engineering
+1. Core Features:
+   - Rolling 5-game scoring metrics
+   - Team performance indicators
+   - Win rates and streaks
+   - Rest days between games
+
+2. Enhanced Features:
+   - Win Rate Differential
+   - Point Differential Ratio
+   - Rest Day Advantage
+   - Streak Advantage
+   - Recent Form Ratio
+   - Win Rate-Rest Interaction
+   - Streak-Form Interaction
+
+#### Model Architecture
+1. Moneyline Ensemble:
+   - Random Forest (500 estimators, max depth 12)
+   - Logistic Regression (C=0.8)
+   - SVM (RBF kernel, C=10.0)
+   - XGBoost (300 estimators, max depth 8)
+   - LightGBM (300 estimators, max depth 8)
+
+2. Data Processing:
+   - 80/20 train-test split
+   - StandardScaler normalization
+   - Comprehensive NaN handling
+   - Stratified sampling for balanced classes
+
+3. Performance Metrics:
+   - Moneyline: 80.0% accuracy
+     * Class 0: 0.86 precision, 0.75 recall
+     * Class 1: 0.75 precision, 0.86 recall
+   - Spread: 15.155 RMSE
+   - Totals: 14.435 RMSE
 
 ### Usage
 

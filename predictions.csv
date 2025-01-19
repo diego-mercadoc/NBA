@@ -1,4 +1,4 @@
-Home_Team,Away_Team,Date,Home_Win_Prob,Away_Win_Prob,Moneyline_Pick,Predicted_Spread,Predicted_Total,First_Half_Total,First_Half_Spread,Avg_Quarter_Points,First_Quarter_Total,First_Quarter_Spread,Moneyline_Confidence,Formatted_Predictions
+Home_Team,Away_Team,Date,Home_Win_Prob,Away_Win_Prob,Moneyline_Pick,Predicted_Spread,Predicted_Total,First_Half_Total,First_Half_Spread,Avg_Quarter_Points,First_Quarter_Total,First_Quarter_Spread,Moneyline_Confidence,Formatted_Predictions,Value_Rating
 Detroit Pistons,Phoenix Suns,2025-01-18,0.07215489828812575,0.9278451110250999,0,-3.1348271,223.31476807263647,116.12367939777097,-1.504717,55.82869201815912,53.59554433743275,-1.4106722,0.9278451110250999,"Game: Phoenix Suns @ Detroit Pistons
 Moneyline: Phoenix Suns ML (92.8% confidence)
 Win Probabilities: Detroit Pistons: 7.2%, Phoenix Suns: 92.8%
@@ -10,7 +10,7 @@ First Half:
   - Total: 116.1
 First Quarter:
   - Spread: Detroit Pistons -1.4
-  - Total: 53.6"
+  - Total: 53.6",0.8733427784840322
 Boston Celtics,Atlanta Hawks,2025-01-18,0.09133486486418674,0.9086651425863939,0,3.6996355,215.76534196210386,112.19797782029401,1.775825,53.941335490525965,51.78368207090492,1.6648359,0.9086651425863939,"Game: Atlanta Hawks @ Boston Celtics
 Moneyline: Atlanta Hawks ML (90.9% confidence)
 Win Probabilities: Boston Celtics: 9.1%, Atlanta Hawks: 90.9%
@@ -22,7 +22,7 @@ First Half:
   - Total: 112.2
 First Quarter:
   - Spread: Boston Celtics +1.7
-  - Total: 51.8"
+  - Total: 51.8",0.8169474866812888
 Indiana Pacers,Philadelphia 76ers,2025-01-18,0.17473219070948284,0.8252678068069903,0,-7.7008824,212.92897817334827,110.7230686501411,-3.6964235,53.23224454333707,51.102954761603584,-3.4653971,0.8252678068069903,"Game: Philadelphia 76ers @ Indiana Pacers
 Moneyline: Philadelphia 76ers ML (82.5% confidence)
 Win Probabilities: Indiana Pacers: 17.5%, Philadelphia 76ers: 82.5%
@@ -34,7 +34,7 @@ First Half:
   - Total: 110.7
 First Quarter:
   - Spread: Indiana Pacers -3.5
-  - Total: 51.1"
+  - Total: 51.1",0.5905527112612866
 Golden State Warriors,Washington Wizards,2025-01-18,0.17216121694984285,0.8278387855336841,0,-3.4506443,215.1561203837026,111.88118259952536,-1.6563092,53.78903009592565,51.63746889208863,-1.5527899,0.8278387855336841,"Game: Washington Wizards @ Golden State Warriors
 Moneyline: Washington Wizards ML (82.8% confidence)
 Win Probabilities: Golden State Warriors: 17.2%, Washington Wizards: 82.8%
@@ -46,7 +46,7 @@ First Half:
   - Total: 111.9
 First Quarter:
   - Spread: Golden State Warriors -1.6
-  - Total: 51.6"
+  - Total: 51.6",0.5970748542859386
 Minnesota Timberwolves,Cleveland Cavaliers,2025-01-18,0.13453590037557708,0.8654641045914765,0,-3.4005241,211.67411709923874,110.07054089160415,-1.6322515,52.918529274809686,50.801788103817294,-1.5302358,0.8654641045914765,"Game: Cleveland Cavaliers @ Minnesota Timberwolves
 Moneyline: Cleveland Cavaliers ML (86.5% confidence)
 Win Probabilities: Minnesota Timberwolves: 13.5%, Cleveland Cavaliers: 86.5%
@@ -58,7 +58,7 @@ First Half:
   - Total: 110.1
 First Quarter:
   - Spread: Minnesota Timberwolves -1.5
-  - Total: 50.8"
+  - Total: 50.8",0.6958513361606062
 Portland Trail Blazers,Houston Rockets,2025-01-18,0.07374894477109983,0.9262510527453734,0,10.023546,231.9200130206003,120.59840677071216,4.811302,57.98000325515007,55.66080312494407,4.510596,0.9262510527453734,"Game: Houston Rockets @ Portland Trail Blazers
 Moneyline: Houston Rockets ML (92.6% confidence)
 Win Probabilities: Portland Trail Blazers: 7.4%, Houston Rockets: 92.6%
@@ -70,4 +70,4 @@ First Half:
   - Total: 120.6
 First Quarter:
   - Spread: Portland Trail Blazers +4.5
-  - Total: 55.7"
+  - Total: 55.7",0.8685940724767032

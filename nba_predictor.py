@@ -355,19 +355,19 @@ class NBAPredictor:
             f"  - Total: {first_q_total:.1f}"
         )
     
-    def get_best_bets(self, predictions_df, confidence_threshold=0.75):  # Increased threshold
-        """Filter and return only the highest confidence bets"""
+    def get_best_bets(self, predictions_df, confidence_threshold=0.90, min_value_rating=0.70):
+        """Filter and return only the highest confidence bets with enhanced value ratings"""
         best_bets = []
         
         # Moneyline bets with stricter confidence requirements
         ml_bets = predictions_df[
-            predictions_df['Moneyline_Confidence'] > confidence_threshold
+            (predictions_df['Moneyline_Confidence'] > confidence_threshold)
         ].copy()
         
         for _, game in ml_bets.iterrows():
-            # Only include bets with high value rating
+            # Enhanced value rating calculation
             value_rating = self._calculate_value_rating(game)
-            if value_rating > 0.6:  # Increased value threshold
+            if value_rating > min_value_rating:
                 bet = {
                     'Game': f"{game['Away_Team']} @ {game['Home_Team']}",
                     'Bet_Type': 'Moneyline',
@@ -377,44 +377,97 @@ class NBAPredictor:
                 }
                 best_bets.append(bet)
             
-            # First Half total with stricter validation
-            if abs(game['First_Half_Total'] - (game['Predicted_Total'] * 0.52)) < 4:  # Tighter threshold
-                bet = {
-                    'Game': f"{game['Away_Team']} @ {game['Home_Team']}",
-                    'Bet_Type': 'First Half Total',
-                    'Prediction': f"Over {game['First_Half_Total']:.1f}",
-                    'Confidence': 0.78,  # Increased confidence threshold
-                    'Value_Rating': 0.70
-                }
-                best_bets.append(bet)
+            # First Half total with enhanced validation
+            if abs(game['First_Half_Total'] - (game['Predicted_Total'] * 0.52)) < 3:  # Tighter threshold
+                half_confidence = min(0.95, game['Moneyline_Confidence'] * 1.1)  # Cap at 95%
+                half_value = self._calculate_half_value(game)
+                if half_confidence > confidence_threshold and half_value > min_value_rating:
+                    bet = {
+                        'Game': f"{game['Away_Team']} @ {game['Home_Team']}",
+                        'Bet_Type': 'First Half Total',
+                        'Prediction': f"Over {game['First_Half_Total']:.1f}",
+                        'Confidence': half_confidence,
+                        'Value_Rating': half_value
+                    }
+                    best_bets.append(bet)
             
-            # First Quarter total with stricter validation
-            if abs(game['First_Quarter_Total'] - (game['Predicted_Total'] * 0.24)) < 2:  # Tighter threshold
-                bet = {
-                    'Game': f"{game['Away_Team']} @ {game['Home_Team']}",
-                    'Bet_Type': 'First Quarter Total',
-                    'Prediction': f"Over {game['First_Quarter_Total']:.1f}",
-                    'Confidence': 0.75,  # Increased confidence threshold
-                    'Value_Rating': 0.65
-                }
-                best_bets.append(bet)
+            # First Quarter total with enhanced validation
+            if abs(game['First_Quarter_Total'] - (game['Predicted_Total'] * 0.24)) < 1.5:  # Tighter threshold
+                quarter_confidence = min(0.95, game['Moneyline_Confidence'] * 1.05)  # Cap at 95%
+                quarter_value = self._calculate_quarter_value(game)
+                if quarter_confidence > confidence_threshold and quarter_value > min_value_rating:
+                    bet = {
+                        'Game': f"{game['Away_Team']} @ {game['Home_Team']}",
+                        'Bet_Type': 'First Quarter Total',
+                        'Prediction': f"Over {game['First_Quarter_Total']:.1f}",
+                        'Confidence': quarter_confidence,
+                        'Value_Rating': quarter_value
+                    }
+                    best_bets.append(bet)
         
         return pd.DataFrame(best_bets)
     
     def _calculate_value_rating(self, row):
-        """Enhanced value rating calculation with more factors"""
-        # Base value calculation
+        """Enhanced value rating calculation with more factors and stricter thresholds"""
+        # Base value from probability margin
         prob_margin = abs(row['Home_Win_Prob'] - row['Away_Win_Prob'])
         value_rating = row['Moneyline_Confidence'] * prob_margin
         
-        # Enhanced adjustments for form and rest
+        # Enhanced adjustments with stricter thresholds
         if all(col in row for col in ['Home_Point_Diff_Roll5', 'Away_Point_Diff_Roll5', 'Home_Rest_Days', 'Away_Rest_Days']):
-            form_factor = abs(row['Home_Point_Diff_Roll5'] - row['Away_Point_Diff_Roll5']) / 8  # More conservative
-            rest_factor = abs(row['Home_Rest_Days'] - row['Away_Rest_Days']) / 4  # More conservative
-            streak_factor = abs(row.get('Home_Streak', 0) - row.get('Away_Streak', 0)) / 10
+            # Form factor with exponential weighting
+            form_diff = abs(row['Home_Point_Diff_Roll5'] - row['Away_Point_Diff_Roll5'])
+            form_factor = np.tanh(form_diff / 10)  # Normalized between -1 and 1
+            
+            # Rest advantage with diminishing returns
+            rest_diff = abs(row['Home_Rest_Days'] - row['Away_Rest_Days'])
+            rest_factor = np.tanh(rest_diff / 3)  # Normalized between -1 and 1
+            
+            # Streak impact with momentum consideration
+            streak_diff = abs(row.get('Home_Streak', 0) - row.get('Away_Streak', 0))
+            streak_factor = np.tanh(streak_diff / 5)  # Normalized between -1 and 1
+            
+            # Recent performance weight (last 3 games)
+            recent_weight = 1.2 if form_factor > 0.5 else 1.0
             
             # Combine factors with weighted importance
-            value_rating *= (1 + 0.4*form_factor + 0.3*rest_factor + 0.3*streak_factor)
+            value_rating *= (1 + 0.3*form_factor + 0.2*rest_factor + 0.2*streak_factor) * recent_weight
+        
+        # Additional confidence boost for extreme differentials
+        if prob_margin > 0.4:  # 40% probability difference
+            value_rating *= 1.1
         
         # Cap the value rating at 1.0
-        return min(value_rating, 1.0) 
+        return min(value_rating, 1.0)
+    
+    def _calculate_half_value(self, row):
+        """Calculate value rating for first half totals"""
+        base_value = self._calculate_value_rating(row)
+        
+        # Adjust based on first half scoring patterns
+        if 'First_Half_Total' in row and 'Predicted_Total' in row:
+            half_ratio = row['First_Half_Total'] / row['Predicted_Total']
+            if 0.50 <= half_ratio <= 0.54:  # Ideal range
+                base_value *= 1.1
+            elif 0.48 <= half_ratio <= 0.56:  # Acceptable range
+                base_value *= 1.0
+            else:
+                base_value *= 0.8
+        
+        return min(base_value * 0.95, 1.0)  # Slightly lower confidence for halves
+    
+    def _calculate_quarter_value(self, row):
+        """Calculate value rating for first quarter totals"""
+        base_value = self._calculate_value_rating(row)
+        
+        # Adjust based on first quarter scoring patterns
+        if 'First_Quarter_Total' in row and 'Predicted_Total' in row:
+            quarter_ratio = row['First_Quarter_Total'] / row['Predicted_Total']
+            if 0.23 <= quarter_ratio <= 0.25:  # Ideal range
+                base_value *= 1.1
+            elif 0.22 <= quarter_ratio <= 0.26:  # Acceptable range
+                base_value *= 1.0
+            else:
+                base_value *= 0.8
+        
+        return min(base_value * 0.90, 1.0)  # Lower confidence for quarters 

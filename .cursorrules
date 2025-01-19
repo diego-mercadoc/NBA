@@ -355,12 +355,17 @@
         "confidence_thresholds": {
             "high": 0.90,
             "medium": 0.80,
-            "low": 0.75
+            "low": 0.75,
+            "parlay_minimum": 0.90,
+            "half_cap": 0.95,
+            "quarter_cap": 0.95
         },
         "value_ratings": {
             "excellent": 0.80,
-            "good": 0.60,
-            "fair": 0.40
+            "good": 0.70,
+            "fair": 0.60,
+            "minimum_bet": 0.70,
+            "minimum_parlay": 0.70
         },
         "historical_patterns": {
             "first_half_total_ratio": 0.52,
@@ -368,9 +373,23 @@
             "first_quarter_total_ratio": 0.24,
             "first_quarter_spread_ratio": 0.45,
             "validation_threshold": {
-                "half_total_points": 4,
-                "quarter_total_points": 2
+                "half_total_points": 3,
+                "quarter_total_points": 1.5
             }
+        },
+        "season_weights": {
+            "current": 1.0,
+            "previous": 0.8,
+            "historical": 0.6
+        },
+        "form_factors": {
+            "normalization": "tanh",
+            "form_scale": 10,
+            "rest_scale": 3,
+            "streak_scale": 5,
+            "recent_performance_boost": 1.2,
+            "probability_margin_threshold": 0.4,
+            "probability_margin_boost": 1.1
         },
         "non_overlapping_bets": {
             "allowed_combinations": [
@@ -382,58 +401,6 @@
                 ["Full Game Total", "First Half Total"],
                 ["Full Game Total", "First Quarter Total"],
                 ["First Half Total", "Second Half Total"]
-            ]
-        },
-        "ensemble_config": {
-            "models": {
-                "random_forest": {
-                    "n_estimators": 500,
-                    "max_depth": 12,
-                    "min_samples_split": 5,
-                    "min_samples_leaf": 2
-                },
-                "logistic_regression": {
-                    "C": 0.8,
-                    "max_iter": 2000,
-                    "class_weight": "balanced"
-                },
-                "svm": {
-                    "kernel": "rbf",
-                    "C": 10.0,
-                    "gamma": "scale",
-                    "probability": true
-                },
-                "xgboost": {
-                    "n_estimators": 300,
-                    "max_depth": 8,
-                    "learning_rate": 0.03,
-                    "subsample": 0.8,
-                    "colsample_bytree": 0.8
-                },
-                "lightgbm": {
-                    "n_estimators": 300,
-                    "max_depth": 8,
-                    "learning_rate": 0.03,
-                    "subsample": 0.8,
-                    "colsample_bytree": 0.8
-                }
-            },
-            "voting": "soft",
-            "weights": [2, 1, 1, 2, 2],
-            "validation_split": 0.2
-        },
-        "feature_engineering": {
-            "interaction_features": true,
-            "exponential_weighting": true,
-            "missing_value_strategy": "mean",
-            "advanced_features": [
-                "Win_Rate_Diff",
-                "Point_Diff_Ratio",
-                "Rest_Advantage",
-                "Streak_Advantage",
-                "Recent_Form_Ratio",
-                "Win_Rate_Rest_Interaction",
-                "Streak_Form_Interaction"
             ]
         }
     },
