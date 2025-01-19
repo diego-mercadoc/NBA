@@ -35,12 +35,46 @@
             },
             "phase2": {
                 "name": "Enhanced Data Integration",
-                "status": "planned",
+                "status": "in_progress",
                 "components": {
                     "injury_data": {
-                        "sources": ["espn", "rotoworld"],
-                        "update_frequency": "daily",
-                        "required_fields": ["player", "status", "details", "return_date"]
+                        "status": "active",
+                        "sources": [
+                            "NBA.com",
+                            "ESPN",
+                            "Rotoworld",
+                            "Basketball Reference"
+                        ],
+                        "update_frequency": "12_hours",
+                        "required_fields": [
+                            "player",
+                            "team",
+                            "status",
+                            "details",
+                            "source",
+                            "last_update"
+                        ],
+                        "fallback_mechanism": {
+                            "enabled": true,
+                            "source_priority": ["NBA.com", "ESPN", "Rotoworld", "Basketball Reference"],
+                            "cache_duration": "12_hours",
+                            "retry_on_failure": true
+                        },
+                        "player_impact": {
+                            "tiers": {
+                                "superstar": 0.15,
+                                "star": 0.10,
+                                "starter": 0.05,
+                                "rotation": 0.025,
+                                "bench": 0.01
+                            },
+                            "status_weights": {
+                                "out": 1.0,
+                                "doubtful": 1.0,
+                                "questionable": 0.5,
+                                "probable": 0.25
+                            }
+                        }
                     },
                     "betting_odds": {
                         "source": "oddsportal",
@@ -318,9 +352,9 @@
         },
         "phase2": {
             "name": "Enhanced Data Integration",
-            "status": "planned",
+            "status": "in_progress",
             "components": {
-                "injury_data": "pending",
+                "injury_data": "active",
                 "betting_odds": "pending",
                 "player_mapping": "pending"
             }

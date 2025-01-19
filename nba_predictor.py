@@ -6,11 +6,13 @@ from sklearn.ensemble import RandomForestClassifier, GradientBoostingRegressor, 
 from sklearn.metrics import accuracy_score, mean_squared_error, classification_report
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
+from sklearn.calibration import CalibratedClassifierCV, calibration_curve
 import xgboost as xgb
 import lightgbm as lgb
 import logging
 import joblib
 from datetime import datetime, timedelta
+from nba_injury_tracker import NBAInjuryTracker
 
 class NBAPredictor:
     """
@@ -28,11 +30,17 @@ class NBAPredictor:
         self.moneyline_model = None
         self.spread_model = None
         self.totals_model = None
+        self.injury_tracker = NBAInjuryTracker()
         self.feature_columns = [
             'Home_Points_Scored_Roll5', 'Home_Points_Allowed_Roll5', 'Home_Point_Diff_Roll5',
             'Away_Points_Scored_Roll5', 'Away_Points_Allowed_Roll5', 'Away_Point_Diff_Roll5',
+            'Home_Points_Scored_Roll3', 'Home_Points_Allowed_Roll3', 'Home_Point_Diff_Roll3',
+            'Away_Points_Scored_Roll3', 'Away_Points_Allowed_Roll3', 'Away_Point_Diff_Roll3',
+            'Home_Points_Scored_Roll10', 'Home_Points_Allowed_Roll10', 'Home_Point_Diff_Roll10',
+            'Away_Points_Scored_Roll10', 'Away_Points_Allowed_Roll10', 'Away_Point_Diff_Roll10',
             'Home_Streak', 'Away_Streak', 'Home_Rest_Days', 'Away_Rest_Days',
-            'Home_Win_Rate', 'Away_Win_Rate'
+            'Home_Win_Rate', 'Away_Win_Rate',
+            'Home_Injury_Impact', 'Away_Injury_Impact'
         ]
         
         # Initialize base models for ensemble with optimized parameters
@@ -78,12 +86,62 @@ class NBAPredictor:
         )
     
     def prepare_features(self, games_df):
-        """Prepare features for ML models with enhanced engineering"""
+        """Prepare features for ML models with enhanced engineering and injury data"""
         df = games_df.copy()
+        
+        # Update injury data
+        self.injury_tracker.update_injuries()
+        
+        # Add injury impact scores
+        df['Home_Injury_Impact'] = df['Home_Team'].apply(self.injury_tracker.get_team_injury_impact)
+        df['Away_Injury_Impact'] = df['Away_Team'].apply(self.injury_tracker.get_team_injury_impact)
         
         # Calculate win/loss columns
         df['Home_Win'] = (df['Home_Points'] > df['Away_Points']).astype(int)
         df['Away_Win'] = (df['Away_Points'] > df['Home_Points']).astype(int)
+        
+        # Calculate rolling stats for multiple windows
+        for window in [3, 5, 10]:
+            for team_type in ['Home', 'Away']:
+                # Points scored rolling average
+                df[f'{team_type}_Points_Scored_Roll{window}'] = df.groupby(f'{team_type}_Team')['Home_Points' if team_type == 'Home' else 'Away_Points'].transform(lambda x: x.rolling(window, min_periods=1).mean())
+                
+                # Points allowed rolling average
+                df[f'{team_type}_Points_Allowed_Roll{window}'] = df.groupby(f'{team_type}_Team')['Away_Points' if team_type == 'Home' else 'Home_Points'].transform(lambda x: x.rolling(window, min_periods=1).mean())
+                
+                # Point differential rolling average
+                df[f'{team_type}_Point_Diff_Roll{window}'] = df[f'{team_type}_Points_Scored_Roll{window}'] - df[f'{team_type}_Points_Allowed_Roll{window}']
+        
+        # Calculate weighted recent form
+        for team_type in ['Home', 'Away']:
+            df[f'{team_type}_Recent_Form_Weighted'] = (
+                0.5 * df[f'{team_type}_Point_Diff_Roll3'] +
+                0.3 * df[f'{team_type}_Point_Diff_Roll5'] +
+                0.2 * df[f'{team_type}_Point_Diff_Roll10']
+            )
+            
+            # Add weighted form to feature columns if not already present
+            if f'{team_type}_Recent_Form_Weighted' not in self.feature_columns:
+                self.feature_columns.append(f'{team_type}_Recent_Form_Weighted')
+        
+        # Add opponent style interaction features
+        # Pace differential
+        df['Pace_Differential'] = df['Home_Points_Scored_Roll5'] + df['Home_Points_Allowed_Roll5'] - (df['Away_Points_Scored_Roll5'] + df['Away_Points_Allowed_Roll5'])
+        self.feature_columns.append('Pace_Differential')
+
+        # Offensive vs Defensive matchup
+        df['Home_Off_vs_Away_Def'] = df['Home_Points_Scored_Roll5'] / df['Away_Points_Allowed_Roll5'].replace(0, 1)
+        df['Away_Off_vs_Home_Def'] = df['Away_Points_Scored_Roll5'] / df['Home_Points_Allowed_Roll5'].replace(0, 1)
+        self.feature_columns.extend(['Home_Off_vs_Away_Def', 'Away_Off_vs_Home_Def'])
+
+        # Style similarity score (lower means more similar playing styles)
+        df['Style_Similarity'] = abs(df['Pace_Differential']) + abs(df['Home_Off_vs_Away_Def'] - df['Away_Off_vs_Home_Def'])
+        self.feature_columns.append('Style_Similarity')
+
+        # Form-matchup interaction
+        df['Home_Form_Matchup'] = df['Home_Recent_Form_Weighted'] * df['Home_Off_vs_Away_Def']
+        df['Away_Form_Matchup'] = df['Away_Recent_Form_Weighted'] * df['Away_Off_vs_Home_Def']
+        self.feature_columns.extend(['Home_Form_Matchup', 'Away_Form_Matchup'])
         
         # Calculate win rates with exponential weighting
         for team_type in ['Home', 'Away']:
@@ -154,7 +212,7 @@ class NBAPredictor:
         return y_moneyline, y_spread, y_totals
     
     def train_models(self, games_df, test_size=0.2):
-        """Train ML models with enhanced ensemble and fine-tuning"""
+        """Train ML models with enhanced ensemble and calibration"""
         logging.info("Preparing features and labels...")
         
         played_games = games_df.dropna(subset=['Home_Points', 'Away_Points'])
@@ -176,41 +234,79 @@ class NBAPredictor:
         X_train_scaled = self.scaler.fit_transform(X_train)
         X_test_scaled = self.scaler.transform(X_test)
         
-        # Train base models separately
-        logging.info("Training enhanced moneyline models...")
+        # Train base models separately with calibration
+        logging.info("Training enhanced moneyline models with calibration...")
         
-        # Train sklearn ensemble
+        # Calibrate each base model
+        self.rf_calibrated = CalibratedClassifierCV(
+            self.rf_classifier, 
+            cv=5, 
+            method='sigmoid'
+        )
+        self.rf_calibrated.fit(X_train_scaled, y_ml_train)
+        
+        self.lr_calibrated = CalibratedClassifierCV(
+            self.lr_classifier,
+            cv=5,
+            method='sigmoid'
+        )
+        self.lr_calibrated.fit(X_train_scaled, y_ml_train)
+        
+        self.svm_calibrated = CalibratedClassifierCV(
+            self.svm_classifier,
+            cv=5,
+            method='sigmoid'
+        )
+        self.svm_calibrated.fit(X_train_scaled, y_ml_train)
+        
+        # Train sklearn ensemble with calibrated models
         self.moneyline_model = VotingClassifier(
             estimators=[
-                ('rf', self.rf_classifier),
-                ('lr', self.lr_classifier),
-                ('svm', self.svm_classifier)
+                ('rf', self.rf_calibrated),
+                ('lr', self.lr_calibrated),
+                ('svm', self.svm_calibrated)
             ],
             voting='soft',
             weights=[2, 1, 1]
         )
         self.moneyline_model.fit(X_train_scaled, y_ml_train)
         
-        # Train XGBoost
-        self.xgb_classifier.fit(X_train_scaled, y_ml_train)
+        # Train and calibrate XGBoost
+        self.xgb_calibrated = CalibratedClassifierCV(
+            self.xgb_classifier,
+            cv=5,
+            method='sigmoid'
+        )
+        self.xgb_calibrated.fit(X_train_scaled, y_ml_train)
         
-        # Train LightGBM
-        self.lgb_classifier.fit(X_train_scaled, y_ml_train)
+        # Train and calibrate LightGBM
+        self.lgb_calibrated = CalibratedClassifierCV(
+            self.lgb_classifier,
+            cv=5,
+            method='sigmoid'
+        )
+        self.lgb_calibrated.fit(X_train_scaled, y_ml_train)
         
-        # Get predictions from all models
+        # Get predictions from all calibrated models
         sklearn_proba = self.moneyline_model.predict_proba(X_test_scaled)
-        xgb_proba = self.xgb_classifier.predict_proba(X_test_scaled)
-        lgb_proba = self.lgb_classifier.predict_proba(X_test_scaled)
+        xgb_proba = self.xgb_calibrated.predict_proba(X_test_scaled)
+        lgb_proba = self.lgb_calibrated.predict_proba(X_test_scaled)
         
-        # Weighted average of probabilities
+        # Weighted average of calibrated probabilities
         ensemble_proba = (2*sklearn_proba + 2*xgb_proba + 2*lgb_proba) / 6
         y_ml_pred = (ensemble_proba[:, 1] > 0.5).astype(int)
         
-        # Evaluate moneyline model
+        # Evaluate calibrated moneyline model
         ml_accuracy = accuracy_score(y_ml_test, y_ml_pred)
-        logging.info(f"Enhanced ensemble moneyline model accuracy: {ml_accuracy:.3f}")
+        logging.info(f"Enhanced calibrated ensemble moneyline model accuracy: {ml_accuracy:.3f}")
         logging.info("\nMoneyline Classification Report:")
         logging.info(classification_report(y_ml_test, y_ml_pred))
+        
+        # Check calibration quality
+        prob_true, prob_pred = calibration_curve(y_ml_test, ensemble_proba[:, 1], n_bins=10)
+        logging.info("\nCalibration Check (ideal values should be similar):")
+        for true_prob, pred_prob in zip(prob_true, prob_pred):
+            logging.info(f"True probability: {true_prob:.3f}, Predicted probability: {pred_prob:.3f}")
         
         # Train enhanced spread model with XGBoost
         logging.info("Training enhanced spread model...")
@@ -277,7 +373,7 @@ class NBAPredictor:
             return False
     
     def predict_games(self, games_df):
-        """Generate predictions for games with enhanced ensemble"""
+        """Generate predictions for games with enhanced ensemble, value ratings, and injury consideration"""
         X = self.prepare_features(games_df)
         X_scaled = self.scaler.transform(X)
         
@@ -286,39 +382,102 @@ class NBAPredictor:
         predictions['Away_Team'] = games_df['Away_Team']
         predictions['Date'] = games_df['Date']
         
-        # Get predictions from all models
+        # Get predictions from all calibrated models
         sklearn_proba = self.moneyline_model.predict_proba(X_scaled)
-        xgb_proba = self.xgb_classifier.predict_proba(X_scaled)
-        lgb_proba = self.lgb_classifier.predict_proba(X_scaled)
+        xgb_proba = self.xgb_calibrated.predict_proba(X_scaled)
+        lgb_proba = self.lgb_calibrated.predict_proba(X_scaled)
         
-        # Weighted average of probabilities
+        # Weighted average of calibrated probabilities
         ensemble_proba = (2*sklearn_proba + 2*xgb_proba + 2*lgb_proba) / 6
+        
+        # Adjust probabilities based on injury impact
+        home_injury_impact = X['Home_Injury_Impact']
+        away_injury_impact = X['Away_Injury_Impact']
+        
+        # Reduce win probability based on injury impact
+        ensemble_proba[:, 1] *= (1 - home_injury_impact)  # Home team
+        ensemble_proba[:, 0] *= (1 - away_injury_impact)  # Away team
+        
+        # Renormalize probabilities
+        row_sums = ensemble_proba.sum(axis=1)
+        ensemble_proba = ensemble_proba / row_sums[:, np.newaxis]
+        
         predictions['Home_Win_Prob'] = ensemble_proba[:, 1]
         predictions['Away_Win_Prob'] = ensemble_proba[:, 0]
         predictions['Moneyline_Pick'] = (predictions['Home_Win_Prob'] > 0.5).astype(int)
         
+        # Add injury information to predictions
+        predictions['Home_Injury_Impact'] = home_injury_impact
+        predictions['Away_Injury_Impact'] = away_injury_impact
+        
+        # Get detailed injury reports
+        predictions['Home_Injury_Report'] = predictions['Home_Team'].apply(
+            lambda x: self.injury_tracker.get_injury_report(x).to_dict('records')
+        )
+        predictions['Away_Injury_Report'] = predictions['Away_Team'].apply(
+            lambda x: self.injury_tracker.get_injury_report(x).to_dict('records')
+        )
+        
         # Spread and totals predictions
         predictions['Predicted_Spread'] = self.spread_model.predict(X_scaled)
         predictions['Predicted_Total'] = self.totals_model.predict(X_scaled)
+        
+        # Enhanced value ratings
+        predictions['Form_Factor'] = np.tanh(
+            (X['Home_Recent_Form_Weighted'] - X['Away_Recent_Form_Weighted']) / 10
+        )
+        
+        predictions['Rest_Advantage'] = np.tanh(
+            (X['Home_Rest_Days'] - X['Away_Rest_Days']) / 3
+        )
+        
+        predictions['Streak_Impact'] = np.tanh(
+            (X['Home_Streak'] - X['Away_Streak']) / 5
+        )
+        
+        # Style matchup consideration
+        predictions['Style_Edge'] = np.tanh(
+            (X['Home_Form_Matchup'] - X['Away_Form_Matchup']) / 5
+        )
+        
+        # Calculate base value rating
+        predictions['Base_Value_Rating'] = (
+            0.4 * predictions['Form_Factor'] +
+            0.2 * predictions['Rest_Advantage'] +
+            0.2 * predictions['Streak_Impact'] +
+            0.2 * predictions['Style_Edge']
+        ).abs()
+        
+        # Probability margin boost
+        prob_margin = abs(predictions['Home_Win_Prob'] - 0.5)
+        predictions['Probability_Margin_Boost'] = np.where(
+            prob_margin > 0.4,
+            1.1,
+            1.0
+        )
+        
+        # Final value rating
+        predictions['Value_Rating'] = predictions['Base_Value_Rating'] * predictions['Probability_Margin_Boost']
         
         # First Half predictions (based on historical patterns)
         predictions['First_Half_Total'] = predictions['Predicted_Total'] * 0.52
         predictions['First_Half_Spread'] = predictions['Predicted_Spread'] * 0.48
         
         # Quarter predictions
-        predictions['Avg_Quarter_Points'] = predictions['Predicted_Total'] / 4
         predictions['First_Quarter_Total'] = predictions['Predicted_Total'] * 0.24
         predictions['First_Quarter_Spread'] = predictions['Predicted_Spread'] * 0.45
         
-        # Enhanced confidence calculation using ensemble agreement
-        predictions['Moneyline_Confidence'] = np.maximum(
-            predictions['Home_Win_Prob'],
-            predictions['Away_Win_Prob']
+        # Add confidence levels based on calibrated probabilities and value ratings
+        predictions['Confidence_Level'] = pd.cut(
+            predictions['Home_Win_Prob'].apply(lambda x: max(x, 1-x)),
+            bins=[0, 0.75, 0.80, 0.90, 1.0],
+            labels=['Low', 'Medium', 'High', 'Very High']
         )
         
-        # Format predictions
-        predictions['Formatted_Predictions'] = predictions.apply(
-            lambda x: self._format_prediction(x), axis=1
+        # Flag high-value bets
+        predictions['High_Value_Bet'] = (
+            (predictions['Value_Rating'] > 0.7) &
+            (predictions['Home_Win_Prob'].apply(lambda x: max(x, 1-x)) > 0.8)
         )
         
         return predictions
@@ -408,7 +567,7 @@ class NBAPredictor:
         return pd.DataFrame(best_bets)
     
     def _calculate_value_rating(self, row):
-        """Enhanced value rating calculation with more factors and stricter thresholds"""
+        """Enhanced value rating calculation with injury impact consideration"""
         # Base value from probability margin
         prob_margin = abs(row['Home_Win_Prob'] - row['Away_Win_Prob'])
         value_rating = row['Moneyline_Confidence'] * prob_margin
@@ -430,18 +589,33 @@ class NBAPredictor:
             # Recent performance weight (last 3 games)
             recent_weight = 1.2 if form_factor > 0.5 else 1.0
             
+            # Injury consideration
+            injury_diff = abs(row.get('Home_Injury_Impact', 0) - row.get('Away_Injury_Impact', 0))
+            injury_factor = np.tanh(injury_diff * 3)  # Amplify injury impact
+            
+            # Higher value if one team is significantly more injured
+            injury_advantage = 1 + (0.2 * injury_factor)
+            
             # Combine factors with weighted importance
-            value_rating *= (1 + 0.3*form_factor + 0.2*rest_factor + 0.2*streak_factor) * recent_weight
+            value_rating *= (
+                (1 + 0.3*form_factor + 0.2*rest_factor + 0.2*streak_factor) * 
+                recent_weight * 
+                injury_advantage
+            )
         
         # Additional confidence boost for extreme differentials
         if prob_margin > 0.4:  # 40% probability difference
             value_rating *= 1.1
         
+        # Reduce value if both teams heavily injured
+        if row.get('Home_Injury_Impact', 0) > 0.2 and row.get('Away_Injury_Impact', 0) > 0.2:
+            value_rating *= 0.8  # Reduce confidence when both teams missing key players
+        
         # Cap the value rating at 1.0
         return min(value_rating, 1.0)
     
     def _calculate_half_value(self, row):
-        """Calculate value rating for first half totals"""
+        """Calculate value rating for first half totals with injury consideration"""
         base_value = self._calculate_value_rating(row)
         
         # Adjust based on first half scoring patterns
@@ -454,10 +628,15 @@ class NBAPredictor:
             else:
                 base_value *= 0.8
         
+        # Further reduce confidence for halves if significant injuries
+        total_injury_impact = row.get('Home_Injury_Impact', 0) + row.get('Away_Injury_Impact', 0)
+        if total_injury_impact > 0.3:  # Significant combined injuries
+            base_value *= 0.9  # Reduce confidence more for half predictions
+        
         return min(base_value * 0.95, 1.0)  # Slightly lower confidence for halves
     
     def _calculate_quarter_value(self, row):
-        """Calculate value rating for first quarter totals"""
+        """Calculate value rating for first quarter totals with injury consideration"""
         base_value = self._calculate_value_rating(row)
         
         # Adjust based on first quarter scoring patterns
@@ -469,5 +648,10 @@ class NBAPredictor:
                 base_value *= 1.0
             else:
                 base_value *= 0.8
+        
+        # Further reduce confidence for quarters if significant injuries
+        total_injury_impact = row.get('Home_Injury_Impact', 0) + row.get('Away_Injury_Impact', 0)
+        if total_injury_impact > 0.3:  # Significant combined injuries
+            base_value *= 0.85  # Reduce confidence even more for quarter predictions
         
         return min(base_value * 0.90, 1.0)  # Lower confidence for quarters 

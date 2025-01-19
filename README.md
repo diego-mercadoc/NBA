@@ -30,6 +30,26 @@ Latest model metrics (as of January 18, 2025):
 
 ### Enhanced Features
 - Ensemble learning combining Random Forest, XGBoost, and LightGBM models
+- Injury tracking and impact analysis:
+  - Multiple data sources with fallback mechanism:
+    * Primary: NBA.com
+    * Secondary: ESPN
+    * Tertiary: Rotoworld
+    * Quaternary: Basketball Reference
+  - Automatic 12-hour data updates
+  - Player impact tiers:
+    * Superstar: 15% impact
+    * Star: 10% impact
+    * Starter: 5% impact
+    * Rotation: 2.5% impact
+    * Bench: 1% impact
+  - Injury status weighting:
+    * Out: 100% of impact
+    * Doubtful: 100% of impact
+    * Questionable: 50% of impact
+    * Probable: 25% of impact
+  - Mock data support for testing and development
+  - Comprehensive error handling and logging
 - Season-based weighting for training data
   - Current season: 1.0x weight
   - Previous season: 0.8x weight
@@ -49,13 +69,18 @@ Latest model metrics (as of January 18, 2025):
   - Streak impact (momentum adjusted)
   - Recent performance boost
   - Probability margin bonus
+  - Injury impact adjustment
 
 ## Recent Updates
+- Enhanced injury tracking system with multiple data sources and fallback mechanism
+- Implemented tiered player impact scoring system
+- Added mock data support for testing and development
+- Improved error handling and logging for injury data collection
+- Enhanced prediction confidence with injury impact consideration
+- Improved value rating calculations with injury factors
 - Implemented ensemble model for improved prediction accuracy
 - Enhanced feature engineering with interaction features
 - Added first half and first quarter predictions
-- Improved value rating calculations
-- Enhanced error handling and NaN value processing
 
 ## Development Roadmap
 1. **Data Quality & Storage** (In Progress)
@@ -63,10 +88,10 @@ Latest model metrics (as of January 18, 2025):
    - ✓ Enhanced prediction models
    - ⚡ Team stats improvements
    
-2. **Enhanced Data Integration** (Planned)
-   - Injury data integration
-   - Real-time odds tracking
-   - Player statistics integration
+2. **Enhanced Data Integration** (In Progress)
+   - ✓ Injury data integration
+   - ⚡ Real-time odds tracking
+   - ⚡ Player statistics integration
 
 3. **Advanced Analytics** (Planned)
    - Quarter-by-quarter predictions
