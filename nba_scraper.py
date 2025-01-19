@@ -790,45 +790,62 @@ class NBADataScraper:
     
     def compute_rolling_stats(self, games_df, window=5):
         """Compute rolling statistics for teams"""
-        games_df = games_df.copy()
-        
-        # Calculate point differential
-        games_df['Point_Diff'] = games_df.apply(
-            lambda x: x['Home_Points'] - x['Away_Points'] if not pd.isna(x['Home_Points']) else 0, 
-            axis=1
-        )
-        
-        # Create masks for home and away games
-        mask_home = ~games_df['Is_Future']
-        mask_away = ~games_df['Is_Future']
-        
-        # Calculate rolling stats for home teams
-        home_stats = games_df[mask_home].groupby('Home_Team')['Point_Diff'].rolling(
-            window=window, min_periods=1
-        ).mean().reset_index()
-        home_stats.columns = ['index', 'Home_Team', f'Home_Point_Diff_Roll{window}']
-        
-        # Calculate rolling stats for away teams (negative point diff)
-        away_stats = games_df[mask_away].groupby('Away_Team')['Point_Diff'].rolling(
-            window=window, min_periods=1
-        ).mean().reset_index()
-        away_stats.columns = ['index', 'Away_Team', f'Away_Point_Diff_Roll{window}']
-        
-        # Merge stats back to games dataframe
-        games_df = pd.merge(
-            games_df,
-            home_stats[['Home_Team', f'Home_Point_Diff_Roll{window}']],
-            on='Home_Team',
-            how='left'
-        )
-        games_df = pd.merge(
-            games_df,
-            away_stats[['Away_Team', f'Away_Point_Diff_Roll{window}']],
-            on='Away_Team',
-            how='left'
-        )
-        
-        return games_df
+        try:
+            games_df = games_df.copy()
+            
+            # Debug logging
+            logging.info(f"Initial Home_Team dtype: {games_df['Home_Team'].dtype}")
+            
+            # Convert Is_Future to boolean if it's not already
+            if 'Is_Future' in games_df.columns:
+                games_df['Is_Future'] = games_df['Is_Future'].fillna(False).astype(bool)
+            else:
+                games_df['Is_Future'] = False
+            
+            # Calculate points scored and allowed
+            games_df['Home_Points_Scored'] = games_df['Home_Points'].fillna(0)
+            games_df['Home_Points_Allowed'] = games_df['Away_Points'].fillna(0)
+            games_df['Away_Points_Scored'] = games_df['Away_Points'].fillna(0)
+            games_df['Away_Points_Allowed'] = games_df['Home_Points'].fillna(0)
+            
+            # Calculate rolling stats for home teams
+            for stat in ['Points_Scored', 'Points_Allowed']:
+                # Calculate rolling stats for each team
+                for team in games_df['Home_Team'].unique():
+                    team_games = games_df[games_df['Home_Team'] == team].copy()
+                    if not team_games.empty:
+                        team_games[f'Home_{stat}_Roll{window}'] = team_games[f'Home_{stat}'].rolling(
+                            window=window, min_periods=1
+                        ).mean()
+                        games_df.loc[games_df['Home_Team'] == team, f'Home_{stat}_Roll{window}'] = team_games[f'Home_{stat}_Roll{window}']
+            
+            # Calculate rolling stats for away teams
+            for stat in ['Points_Scored', 'Points_Allowed']:
+                # Calculate rolling stats for each team
+                for team in games_df['Away_Team'].unique():
+                    team_games = games_df[games_df['Away_Team'] == team].copy()
+                    if not team_games.empty:
+                        team_games[f'Away_{stat}_Roll{window}'] = team_games[f'Away_{stat}'].rolling(
+                            window=window, min_periods=1
+                        ).mean()
+                        games_df.loc[games_df['Away_Team'] == team, f'Away_{stat}_Roll{window}'] = team_games[f'Away_{stat}_Roll{window}']
+            
+            # Calculate point differentials
+            games_df[f'Home_Point_Diff_Roll{window}'] = games_df[f'Home_Points_Scored_Roll{window}'] - games_df[f'Home_Points_Allowed_Roll{window}']
+            games_df[f'Away_Point_Diff_Roll{window}'] = games_df[f'Away_Points_Scored_Roll{window}'] - games_df[f'Away_Points_Allowed_Roll{window}']
+            
+            # Ensure team columns are strings
+            games_df['Home_Team'] = games_df['Home_Team'].astype(str)
+            games_df['Away_Team'] = games_df['Away_Team'].astype(str)
+            
+            # Fill any remaining NaN values with 0
+            roll_cols = [col for col in games_df.columns if 'Roll' in col]
+            games_df[roll_cols] = games_df[roll_cols].fillna(0)
+            
+            return games_df
+        except Exception as e:
+            logging.error(f"Error in compute_rolling_stats: {str(e)}")
+            raise
 
     def get_player_stats(self, season):
         """

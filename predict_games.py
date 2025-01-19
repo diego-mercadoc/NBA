@@ -23,6 +23,9 @@ def main():
             shutil.rmtree('models')
             os.makedirs('models')
         
+        # Initialize scraper for computing rolling stats
+        scraper = NBADataScraper(start_season=2021, end_season=2025)
+        
         # Load historical data
         logging.info("Loading historical data...")
         games_df = pd.read_csv('nba_games_all.csv')
@@ -30,6 +33,10 @@ def main():
         
         # Convert Is_Future to boolean
         games_df['Is_Future'] = games_df['Is_Future'].astype(bool)
+        
+        # Compute rolling stats for all games
+        logging.info("Computing rolling statistics for historical data...")
+        games_df = scraper.compute_rolling_stats(games_df, window=5)
         
         # Initialize predictor with enhanced settings
         predictor = NBAPredictor()
@@ -52,7 +59,6 @@ def main():
         logging.info(f"Totals RMSE: {metrics['totals_rmse']:.3f}")
         
         # Get today's games with enhanced context
-        scraper = NBADataScraper(start_season=2021, end_season=2025)
         today_games = scraper.get_current_games()
         
         if today_games is not None and not today_games.empty:
