@@ -5,6 +5,8 @@ from nba_scraper import NBADataScraper
 from nba_predictor import NBAPredictor
 import os
 import shutil
+import json
+from datetime import datetime
 
 def main():
     """Train models and generate predictions for today's games"""
@@ -38,10 +40,10 @@ def main():
         logging.info("Computing rolling statistics for historical data...")
         games_df = scraper.compute_rolling_stats(games_df, window=5)
         
-        # Initialize predictor with enhanced settings
+        # Initialize predictor
         predictor = NBAPredictor()
         
-        logging.info("Training new models with enhanced features and stricter confidence thresholds...")
+        logging.info("Training models with Bayesian optimization...")
         # Use only completed games for training
         training_data = games_df[~games_df['Is_Future']].copy()
         
@@ -53,8 +55,24 @@ def main():
         
         metrics = predictor.train_models(training_data)
         
+        # Save metrics to track model performance over time
+        metrics_file = 'model_metrics.json'
+        metrics['timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        try:
+            with open(metrics_file, 'r') as f:
+                historical_metrics = json.load(f)
+        except FileNotFoundError:
+            historical_metrics = {'metrics_history': []}
+        
+        historical_metrics['metrics_history'].append(metrics)
+        with open(metrics_file, 'w') as f:
+            json.dump(historical_metrics, f, indent=4)
+        
         logging.info("\nModel Performance Metrics:")
         logging.info(f"Moneyline Accuracy: {metrics['moneyline_accuracy']:.3f}")
+        logging.info(f"Moneyline Brier Score: {metrics['moneyline_brier']:.3f}")
+        logging.info(f"Moneyline Log Loss: {metrics['moneyline_log_loss']:.3f}")
         logging.info(f"Spread RMSE: {metrics['spread_rmse']:.3f}")
         logging.info(f"Totals RMSE: {metrics['totals_rmse']:.3f}")
         

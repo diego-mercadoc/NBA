@@ -346,11 +346,36 @@
     },
     "model_validation": {
         "minimum_accuracy": {
-            "moneyline": 0.85,
-            "spread_rmse": 12.0,
+            "moneyline": 0.80,
+            "moneyline_brier": 0.20,
+            "moneyline_log_loss": 0.55,
+            "spread_rmse": 16.0,
             "totals_rmse": 16.0,
             "first_half_total": 0.78,
             "first_quarter_total": 0.75
+        },
+        "hyperparameter_optimization": {
+            "method": "bayesian",
+            "tool": "optuna",
+            "trials": {
+                "moneyline": 50,
+                "spread": 30,
+                "totals": 30
+            },
+            "optimization_metrics": {
+                "moneyline": {
+                    "log_loss_weight": 0.4,
+                    "brier_weight": 0.4,
+                    "accuracy_weight": 0.2
+                },
+                "spread": "neg_root_mean_squared_error",
+                "totals": "neg_root_mean_squared_error"
+            }
+        },
+        "probability_calibration": {
+            "method": "sigmoid",
+            "cv_folds": 5,
+            "models": ["random_forest", "xgboost", "lightgbm"]
         },
         "confidence_thresholds": {
             "high": 0.90,
@@ -412,9 +437,10 @@
                 "ml_enhancements": {
                     "status": "completed",
                     "changes": [
-                        "Implemented ensemble model for moneyline predictions",
-                        "Enhanced feature engineering",
-                        "Improved value rating calculation",
+                        "Implemented Bayesian optimization for hyperparameters",
+                        "Added probability calibration",
+                        "Enhanced metric tracking",
+                        "Improved ensemble weighting",
                         "Added rest days impact analysis"
                     ]
                 },

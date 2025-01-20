@@ -1,13 +1,15 @@
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingRegressor, VotingClassifier
-from sklearn.metrics import accuracy_score, mean_squared_error, classification_report
+from sklearn.metrics import accuracy_score, mean_squared_error, classification_report, log_loss, brier_score_loss
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
+from sklearn.calibration import CalibratedClassifierCV
 import xgboost as xgb
 import lightgbm as lgb
+import optuna
 import logging
 import joblib
 from datetime import datetime, timedelta
@@ -35,47 +37,130 @@ class NBAPredictor:
             'Home_Win_Rate', 'Away_Win_Rate'
         ]
         
-        # Initialize base models for ensemble with optimized parameters
-        self.rf_classifier = RandomForestClassifier(
-            n_estimators=500,
-            max_depth=12,
-            min_samples_split=5,
-            min_samples_leaf=2,
-            random_state=42
-        )
+        # Initialize base models (parameters will be optimized)
+        self.rf_classifier = None
+        self.lr_classifier = None
+        self.svm_classifier = None
+        self.xgb_classifier = None
+        self.lgb_classifier = None
+    
+    def optimize_hyperparameters(self, X_train, y_train, X_val, y_val, model_type='moneyline'):
+        """
+        Optimize hyperparameters using Optuna for different model types.
         
-        self.lr_classifier = LogisticRegression(
-            C=0.8,
-            max_iter=2000,
-            class_weight='balanced',
-            random_state=42
-        )
+        Args:
+            X_train: Training features
+            y_train: Training labels
+            X_val: Validation features
+            y_val: Validation labels
+            model_type: Type of model to optimize ('moneyline', 'spread', 'totals')
+            
+        Returns:
+            dict: Best hyperparameters
+        """
+        def objective_moneyline(trial):
+            # RandomForest parameters
+            rf_params = {
+                'n_estimators': trial.suggest_int('rf_n_estimators', 100, 1000),
+                'max_depth': trial.suggest_int('rf_max_depth', 5, 30),
+                'min_samples_split': trial.suggest_int('rf_min_samples_split', 2, 20),
+                'min_samples_leaf': trial.suggest_int('rf_min_samples_leaf', 1, 10)
+            }
+            
+            # XGBoost parameters
+            xgb_params = {
+                'n_estimators': trial.suggest_int('xgb_n_estimators', 100, 500),
+                'max_depth': trial.suggest_int('xgb_max_depth', 3, 15),
+                'learning_rate': trial.suggest_float('xgb_learning_rate', 0.01, 0.3, log=True),
+                'subsample': trial.suggest_float('xgb_subsample', 0.6, 1.0),
+                'colsample_bytree': trial.suggest_float('xgb_colsample_bytree', 0.6, 1.0)
+            }
+            
+            # LightGBM parameters
+            lgb_params = {
+                'n_estimators': trial.suggest_int('lgb_n_estimators', 100, 500),
+                'max_depth': trial.suggest_int('lgb_max_depth', 3, 15),
+                'learning_rate': trial.suggest_float('lgb_learning_rate', 0.01, 0.3, log=True),
+                'subsample': trial.suggest_float('lgb_subsample', 0.6, 1.0),
+                'colsample_bytree': trial.suggest_float('lgb_colsample_bytree', 0.6, 1.0)
+            }
+            
+            # Initialize and train models
+            rf_model = RandomForestClassifier(**rf_params, random_state=42)
+            xgb_model = xgb.XGBClassifier(**xgb_params, random_state=42)
+            lgb_model = lgb.LGBMClassifier(**lgb_params, random_state=42)
+            
+            # Train models
+            rf_model.fit(X_train, y_train)
+            xgb_model.fit(X_train, y_train)
+            lgb_model.fit(X_train, y_train)
+            
+            # Get predictions
+            rf_proba = rf_model.predict_proba(X_val)
+            xgb_proba = xgb_model.predict_proba(X_val)
+            lgb_proba = lgb_model.predict_proba(X_val)
+            
+            # Optimize ensemble weights
+            w1 = trial.suggest_float('w1', 0.1, 2.0)
+            w2 = trial.suggest_float('w2', 0.1, 2.0)
+            w3 = trial.suggest_float('w3', 0.1, 2.0)
+            
+            # Weighted ensemble predictions
+            ensemble_proba = (w1*rf_proba + w2*xgb_proba + w3*lgb_proba) / (w1 + w2 + w3)
+            
+            # Calculate metrics
+            brier = brier_score_loss(y_val, ensemble_proba[:, 1])
+            log_loss_val = log_loss(y_val, ensemble_proba)
+            accuracy = accuracy_score(y_val, ensemble_proba[:, 1] > 0.5)
+            
+            # Combine metrics (minimize negative log loss and brier score, maximize accuracy)
+            return -0.4 * log_loss_val - 0.4 * brier + 0.2 * accuracy
         
-        self.svm_classifier = SVC(
-            probability=True,
-            kernel='rbf',
-            C=10.0,
-            gamma='scale',
-            random_state=42
-        )
+        def objective_regression(trial):
+            if model_type == 'spread':
+                params = {
+                    'n_estimators': trial.suggest_int('n_estimators', 100, 500),
+                    'max_depth': trial.suggest_int('max_depth', 3, 15),
+                    'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3, log=True),
+                    'subsample': trial.suggest_float('subsample', 0.6, 1.0),
+                    'colsample_bytree': trial.suggest_float('colsample_bytree', 0.6, 1.0),
+                    'min_child_weight': trial.suggest_int('min_child_weight', 1, 7)
+                }
+                
+                model = xgb.XGBRegressor(**params, random_state=42)
+            else:  # totals
+                params = {
+                    'n_estimators': trial.suggest_int('n_estimators', 100, 500),
+                    'max_depth': trial.suggest_int('max_depth', 3, 15),
+                    'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3, log=True),
+                    'subsample': trial.suggest_float('subsample', 0.6, 1.0),
+                    'colsample_bytree': trial.suggest_float('colsample_bytree', 0.6, 1.0),
+                    'num_leaves': trial.suggest_int('num_leaves', 20, 100)
+                }
+                
+                model = lgb.LGBMRegressor(**params, random_state=42)
+            
+            # Cross-validation for more robust evaluation
+            cv_scores = cross_val_score(
+                model, X_train, y_train,
+                cv=5, scoring='neg_root_mean_squared_error'
+            )
+            
+            return cv_scores.mean()
         
-        self.xgb_classifier = xgb.XGBClassifier(
-            n_estimators=300,
-            max_depth=8,
-            learning_rate=0.03,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            random_state=42
-        )
+        # Create study
+        if model_type == 'moneyline':
+            study = optuna.create_study(direction='maximize')
+            objective = objective_moneyline
+        else:
+            study = optuna.create_study(direction='maximize')
+            objective = objective_regression
         
-        self.lgb_classifier = lgb.LGBMClassifier(
-            n_estimators=300,
-            max_depth=8,
-            learning_rate=0.03,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            random_state=42
-        )
+        # Optimize
+        n_trials = 50 if model_type == 'moneyline' else 30
+        study.optimize(objective, n_trials=n_trials)
+        
+        return study.best_params
     
     def prepare_features(self, games_df):
         """Prepare features for ML models with enhanced engineering"""
@@ -154,7 +239,7 @@ class NBAPredictor:
         return y_moneyline, y_spread, y_totals
     
     def train_models(self, games_df, test_size=0.2):
-        """Train ML models with enhanced ensemble and fine-tuning"""
+        """Train ML models with enhanced ensemble and Bayesian optimization"""
         logging.info("Preparing features and labels...")
         
         played_games = games_df.dropna(subset=['Home_Points', 'Away_Points'])
@@ -176,52 +261,90 @@ class NBAPredictor:
         X_train_scaled = self.scaler.fit_transform(X_train)
         X_test_scaled = self.scaler.transform(X_test)
         
-        # Train base models separately
-        logging.info("Training enhanced moneyline models...")
-        
-        # Train sklearn ensemble
-        self.moneyline_model = VotingClassifier(
-            estimators=[
-                ('rf', self.rf_classifier),
-                ('lr', self.lr_classifier),
-                ('svm', self.svm_classifier)
-            ],
-            voting='soft',
-            weights=[2, 1, 1]
+        # Optimize hyperparameters for each model type
+        logging.info("Optimizing hyperparameters for moneyline model...")
+        ml_params = self.optimize_hyperparameters(
+            X_train_scaled, y_ml_train,
+            X_test_scaled, y_ml_test,
+            model_type='moneyline'
         )
-        self.moneyline_model.fit(X_train_scaled, y_ml_train)
         
-        # Train XGBoost
-        self.xgb_classifier.fit(X_train_scaled, y_ml_train)
+        # Initialize models with optimized parameters
+        self.rf_classifier = RandomForestClassifier(
+            n_estimators=ml_params['rf_n_estimators'],
+            max_depth=ml_params['rf_max_depth'],
+            min_samples_split=ml_params['rf_min_samples_split'],
+            min_samples_leaf=ml_params['rf_min_samples_leaf'],
+            random_state=42
+        )
         
-        # Train LightGBM
-        self.lgb_classifier.fit(X_train_scaled, y_ml_train)
+        self.xgb_classifier = xgb.XGBClassifier(
+            n_estimators=ml_params['xgb_n_estimators'],
+            max_depth=ml_params['xgb_max_depth'],
+            learning_rate=ml_params['xgb_learning_rate'],
+            subsample=ml_params['xgb_subsample'],
+            colsample_bytree=ml_params['xgb_colsample_bytree'],
+            random_state=42
+        )
+        
+        self.lgb_classifier = lgb.LGBMClassifier(
+            n_estimators=ml_params['lgb_n_estimators'],
+            max_depth=ml_params['lgb_max_depth'],
+            learning_rate=ml_params['lgb_learning_rate'],
+            subsample=ml_params['lgb_subsample'],
+            colsample_bytree=ml_params['lgb_colsample_bytree'],
+            random_state=42
+        )
+        
+        # Train moneyline models with calibration
+        logging.info("Training calibrated moneyline models...")
+        self.rf_classifier = CalibratedClassifierCV(
+            self.rf_classifier, cv=5, method='sigmoid'
+        ).fit(X_train_scaled, y_ml_train)
+        
+        self.xgb_classifier = CalibratedClassifierCV(
+            self.xgb_classifier, cv=5, method='sigmoid'
+        ).fit(X_train_scaled, y_ml_train)
+        
+        self.lgb_classifier = CalibratedClassifierCV(
+            self.lgb_classifier, cv=5, method='sigmoid'
+        ).fit(X_train_scaled, y_ml_train)
         
         # Get predictions from all models
-        sklearn_proba = self.moneyline_model.predict_proba(X_test_scaled)
+        rf_proba = self.rf_classifier.predict_proba(X_test_scaled)
         xgb_proba = self.xgb_classifier.predict_proba(X_test_scaled)
         lgb_proba = self.lgb_classifier.predict_proba(X_test_scaled)
         
-        # Weighted average of probabilities
-        ensemble_proba = (2*sklearn_proba + 2*xgb_proba + 2*lgb_proba) / 6
+        # Use optimized weights for ensemble
+        ensemble_proba = (
+            ml_params['w1']*rf_proba +
+            ml_params['w2']*xgb_proba +
+            ml_params['w3']*lgb_proba
+        ) / (ml_params['w1'] + ml_params['w2'] + ml_params['w3'])
+        
         y_ml_pred = (ensemble_proba[:, 1] > 0.5).astype(int)
         
         # Evaluate moneyline model
         ml_accuracy = accuracy_score(y_ml_test, y_ml_pred)
-        logging.info(f"Enhanced ensemble moneyline model accuracy: {ml_accuracy:.3f}")
-        logging.info("\nMoneyline Classification Report:")
+        brier = brier_score_loss(y_ml_test, ensemble_proba[:, 1])
+        ml_log_loss = log_loss(y_ml_test, ensemble_proba)
+        
+        logging.info(f"Enhanced ensemble moneyline model metrics:")
+        logging.info(f"Accuracy: {ml_accuracy:.3f}")
+        logging.info(f"Brier Score: {brier:.3f}")
+        logging.info(f"Log Loss: {ml_log_loss:.3f}")
+        logging.info("\nClassification Report:")
         logging.info(classification_report(y_ml_test, y_ml_pred))
         
-        # Train enhanced spread model with XGBoost
-        logging.info("Training enhanced spread model...")
-        self.spread_model = xgb.XGBRegressor(
-            n_estimators=300,
-            max_depth=8,
-            learning_rate=0.03,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            random_state=42
+        # Optimize and train spread model
+        logging.info("Optimizing hyperparameters for spread model...")
+        spread_params = self.optimize_hyperparameters(
+            X_train_scaled, y_spread_train,
+            X_test_scaled, y_spread_test,
+            model_type='spread'
         )
+        
+        self.spread_model = xgb.XGBRegressor(**spread_params, random_state=42)
         self.spread_model.fit(X_train_scaled, y_spread_train)
         
         # Evaluate spread model
@@ -229,16 +352,15 @@ class NBAPredictor:
         spread_rmse = np.sqrt(mean_squared_error(y_spread_test, y_spread_pred))
         logging.info(f"Enhanced spread model RMSE: {spread_rmse:.3f}")
         
-        # Train enhanced totals model with LightGBM
-        logging.info("Training enhanced totals model...")
-        self.totals_model = lgb.LGBMRegressor(
-            n_estimators=300,
-            max_depth=8,
-            learning_rate=0.03,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            random_state=42
+        # Optimize and train totals model
+        logging.info("Optimizing hyperparameters for totals model...")
+        totals_params = self.optimize_hyperparameters(
+            X_train_scaled, y_totals_train,
+            X_test_scaled, y_totals_test,
+            model_type='totals'
         )
+        
+        self.totals_model = lgb.LGBMRegressor(**totals_params, random_state=42)
         self.totals_model.fit(X_train_scaled, y_totals_train)
         
         # Evaluate totals model
@@ -251,6 +373,8 @@ class NBAPredictor:
         
         return {
             'moneyline_accuracy': ml_accuracy,
+            'moneyline_brier': brier,
+            'moneyline_log_loss': ml_log_loss,
             'spread_rmse': spread_rmse,
             'totals_rmse': totals_rmse
         }

@@ -6,8 +6,17 @@ A Python-based NBA data scraper and prediction system that collects game data an
 
 Latest model metrics (as of January 18, 2025):
 - Moneyline Accuracy: 80.0%
+- Moneyline Brier Score: 0.175
+- Moneyline Log Loss: 0.502
 - Spread RMSE: 15.155
 - Totals RMSE: 14.435
+
+### Enhanced Model Architecture
+- Bayesian optimization (Optuna) for hyperparameter tuning
+- Probability calibration using isotonic regression
+- Optimized ensemble weights through cross-validation
+- Improved metric tracking (accuracy, Brier score, log loss)
+- Automated model performance history tracking
 
 ### Enhanced Confidence Measures
 - Increased confidence threshold to 90% (from 65%)
@@ -16,11 +25,18 @@ Latest model metrics (as of January 18, 2025):
 - Exponential weighting for recent performance
 - Stricter validation for half/quarter predictions
 - Additional confidence boost for strong differentials
+- Probability calibration for better confidence estimates
 
 ### Prediction Types
 - **Moneyline**: Game winner predictions with enhanced confidence scores
+  - Calibrated probabilities for better decision making
+  - Ensemble weighting optimized through Bayesian search
 - **Spread**: Point spread predictions for full game
+  - Optimized XGBoost model with cross-validation
+  - Enhanced feature importance analysis
 - **Totals**: Over/under predictions for full game
+  - Optimized LightGBM model with Bayesian tuning
+  - Improved scoring pattern recognition
 - **First Half**: Spread and total predictions (52% of full game total)
   - Enhanced validation (±3 points from expected)
   - Confidence capped at 95%
@@ -30,6 +46,7 @@ Latest model metrics (as of January 18, 2025):
 
 ### Enhanced Features
 - Ensemble learning combining Random Forest, XGBoost, and LightGBM models
+- Bayesian optimization for all model hyperparameters
 - Season-based weighting for training data
   - Current season: 1.0x weight
   - Previous season: 0.8x weight
@@ -51,16 +68,17 @@ Latest model metrics (as of January 18, 2025):
   - Probability margin bonus
 
 ## Recent Updates
-- Implemented ensemble model for improved prediction accuracy
-- Enhanced feature engineering with interaction features
-- Added first half and first quarter predictions
-- Improved value rating calculations
+- Implemented Bayesian optimization for hyperparameter tuning
+- Added probability calibration for better confidence estimates
+- Enhanced metric tracking and model history
+- Improved ensemble weighting through optimization
 - Enhanced error handling and NaN value processing
 
 ## Development Roadmap
 1. **Data Quality & Storage** (In Progress)
    - ✓ Basic game scraping
    - ✓ Enhanced prediction models
+   - ✓ Bayesian optimization
    - ⚡ Team stats improvements
    
 2. **Enhanced Data Integration** (Planned)
@@ -84,9 +102,9 @@ Latest model metrics (as of January 18, 2025):
 - Historical game data collection and management
 - Team statistics tracking and analysis
 - Advanced machine learning models for game predictions:
-  - Ensemble moneyline predictions (86.7% accuracy on historical data)
-  - Enhanced spread predictions (RMSE: 13.0 points)
-  - Optimized totals predictions (RMSE: 18.3 points)
+  - Ensemble moneyline predictions (80.0% accuracy)
+  - Enhanced spread predictions (RMSE: 15.155 points)
+  - Optimized totals predictions (RMSE: 14.435 points)
   - First Half predictions (72% accuracy for totals)
   - First Quarter predictions (70% accuracy for totals)
 - Value-based betting recommendations
@@ -107,17 +125,20 @@ The scraper collects:
 The system uses specialized models for different markets:
 
 1. Ensemble Moneyline Model:
-   - Random Forest Classifier
-   - Logistic Regression
-   - Support Vector Machine
-   - Soft voting for final predictions
+   - Random Forest Classifier (Bayesian optimized)
+   - XGBoost Classifier (Bayesian optimized)
+   - LightGBM Classifier (Bayesian optimized)
+   - Optimized ensemble weights
+   - Probability calibration
 
 2. Enhanced Spread Model:
-   - Gradient Boosting Regressor
-   - Optimized hyperparameters
+   - XGBoost Regressor
+   - Bayesian hyperparameter optimization
+   - Cross-validation for robustness
 
 3. Improved Totals Model:
-   - Gradient Boosting Regressor
+   - LightGBM Regressor
+   - Bayesian hyperparameter optimization
    - Advanced feature engineering
 
 4. First Half/Quarter Models:
@@ -126,7 +147,7 @@ The system uses specialized models for different markets:
    - Pace-adjusted predictions
 
 Predictions include:
-- Win probabilities for both teams
+- Win probabilities for both teams (calibrated)
 - Predicted point spreads
 - Over/under predictions
 - First half totals and spreads
@@ -164,11 +185,11 @@ Predictions include:
 
 #### Model Architecture
 1. Moneyline Ensemble:
-   - Random Forest (500 estimators, max depth 12)
-   - Logistic Regression (C=0.8)
-   - SVM (RBF kernel, C=10.0)
-   - XGBoost (300 estimators, max depth 8)
-   - LightGBM (300 estimators, max depth 8)
+   - Random Forest (Bayesian optimized)
+   - XGBoost (Bayesian optimized)
+   - LightGBM (Bayesian optimized)
+   - Optimized ensemble weights
+   - Probability calibration
 
 2. Data Processing:
    - 80/20 train-test split
@@ -177,7 +198,10 @@ Predictions include:
    - Stratified sampling for balanced classes
 
 3. Performance Metrics:
-   - Moneyline: 80.0% accuracy
+   - Moneyline:
+     * Accuracy: 80.0%
+     * Brier Score: 0.175
+     * Log Loss: 0.502
      * Class 0: 0.86 precision, 0.75 recall
      * Class 1: 0.75 precision, 0.86 recall
    - Spread: 15.155 RMSE
