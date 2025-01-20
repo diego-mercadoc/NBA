@@ -1100,34 +1100,46 @@ class NBADataScraper:
             logging.error(f"Error analyzing props for {player_name} vs {opponent}: {str(e)}")
             return None
 
-    def get_current_games(self):
+    def get_current_games(self, target_date=None):
         """
-        Get games for the current date or next available game date.
+        Get games for a specific date or current date.
         
+        Args:
+            target_date (str or datetime, optional): Target date in 'YYYY-MM-DD' format or datetime object.
+                                                   If None, uses current date.
+            
         Returns:
-            pd.DataFrame: DataFrame containing today's games and relevant betting metrics
+            pd.DataFrame: DataFrame containing games and relevant betting metrics
         """
         try:
-            current_date = datetime.now()
+            # Handle target_date parameter
+            if target_date is None:
+                current_date = datetime.now()
+            else:
+                if isinstance(target_date, str):
+                    current_date = datetime.strptime(target_date, '%Y-%m-%d')
+                else:
+                    current_date = target_date
+            
             # For NBA season, if we're in Oct-Dec, we're in the next year's season
             season = current_date.year + 1 if current_date.month >= 10 else current_date.year
             month = current_date.strftime('%B').lower()
             
             # Try to get games directly from the website
             url = f"https://www.basketball-reference.com/leagues/NBA_{season}_games-{month}.html"
-            logging.info(f"Fetching current games from {url}")
+            logging.info(f"Fetching games from {url}")
             
             dfs = self._make_request(url)
             if dfs and len(dfs) > 0:
                 df = dfs[0]
                 df['Date'] = pd.to_datetime(df['Date'])
                 
-                # Get today's games
-                today_games = df[df['Date'].dt.date == current_date.date()].copy()
+                # Get games for the target date
+                target_games = df[df['Date'].dt.date == current_date.date()].copy()
                 
-                if not today_games.empty:
+                if not target_games.empty:
                     # Clean column names
-                    today_games.rename(columns={
+                    target_games.rename(columns={
                         'Visitor/Neutral': 'Away_Team',
                         'Home/Neutral': 'Home_Team',
                         'PTS': 'Away_Points',
@@ -1135,13 +1147,13 @@ class NBADataScraper:
                     }, inplace=True)
                     
                     # Add necessary columns
-                    today_games['Season'] = season
-                    today_games['Is_Future'] = True
-                    today_games['Is_Scheduled'] = True
+                    target_games['Season'] = season
+                    target_games['Is_Future'] = True
+                    target_games['Is_Scheduled'] = True
                     
                     # Normalize team names
-                    today_games['Away_Team'] = today_games['Away_Team'].replace(self.team_name_map)
-                    today_games['Home_Team'] = today_games['Home_Team'].replace(self.team_name_map)
+                    target_games['Away_Team'] = target_games['Away_Team'].replace(self.team_name_map)
+                    target_games['Home_Team'] = target_games['Home_Team'].replace(self.team_name_map)
                     
                     # Calculate rest days and streaks
                     games_df = pd.read_csv('nba_games_all.csv')
@@ -1150,7 +1162,7 @@ class NBADataScraper:
                     # Add rest days
                     for team_type in ['Home', 'Away']:
                         rest_days = []
-                        for team in today_games[f'{team_type}_Team']:
+                        for team in target_games[f'{team_type}_Team']:
                             last_game = games_df[
                                 (games_df[f'{team_type}_Team'] == team) |
                                 (games_df[f'{"Away" if team_type == "Home" else "Home"}_Team'] == team)
@@ -1161,7 +1173,7 @@ class NBADataScraper:
                             else:
                                 days = 7  # Default to a week if no previous games
                             rest_days.append(days)
-                        today_games[f'{team_type}_Rest_Days'] = rest_days
+                        target_games[f'{team_type}_Rest_Days'] = rest_days
                     
                     # Add streaks and rolling stats
                     for team_type in ['Home', 'Away']:
@@ -1172,7 +1184,7 @@ class NBADataScraper:
                             'Point_Diff': []
                         }
                         
-                        for team in today_games[f'{team_type}_Team']:
+                        for team in target_games[f'{team_type}_Team']:
                             # Get team's recent games
                             team_games = games_df[
                                 (games_df[f'{team_type}_Team'] == team) |
@@ -1211,24 +1223,24 @@ class NBADataScraper:
                                 for stat in rolling_stats:
                                     rolling_stats[stat].append(0)
                         
-                        today_games[f'{team_type}_Streak'] = streaks
+                        target_games[f'{team_type}_Streak'] = streaks
                         for stat, values in rolling_stats.items():
-                            today_games[f'{team_type}_{stat}_Roll5'] = values
+                            target_games[f'{team_type}_{stat}_Roll5'] = values
                     
                     logging.info(f"\nGames for {current_date.date()}:")
-                    for _, game in today_games.iterrows():
+                    for _, game in target_games.iterrows():
                         logging.info(f"\n{game['Away_Team']} @ {game['Home_Team']}")
                         logging.info(f"Home Streak: {game['Home_Streak']}, Away Streak: {game['Away_Streak']}")
                         logging.info(f"Home L5 Point Diff: {game['Home_Point_Diff_Roll5']:.1f}")
                         logging.info(f"Away L5 Point Diff: {game['Away_Point_Diff_Roll5']:.1f}")
                     
-                    return today_games
+                    return target_games
                 
-            logging.info("No upcoming games found in the dataset")
+            logging.info(f"No games found for {current_date.date()}")
             return None
             
         except Exception as e:
-            logging.error(f"Error getting current games: {str(e)}")
+            logging.error(f"Error getting games: {str(e)}")
             return None
 
     def get_betting_insights(self, games_df=None):

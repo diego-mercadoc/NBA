@@ -1,0 +1,31 @@
+Can we make the predictions for "January 20, 2025"? **IMPORTANT: make emphasis in the date, because I don't know if we can predict for an specific date or just for the "today" date*** I don't know if we can make predictions for any given date. Plus, lets Run the scraper to update data:
+python nba_scraper.py
+Generate predictions for upcoming games:
+python predict_games.py
+
+About the predictions you will give me, can you give me the confidence percentage. For each and every one of them. Including the spreads and points.
+
+***Finally, IMPORTANT: 
+IMPORTANT: READ EVERYTHING IN THE CODEBASE BEFORE IMPLEMENTING, MINOR CHANGES CAN RUIN ALL THE PROGRESS MADE.
+Remember to keep updating @\Users\Diego\Documents\Github\NBA\.cursorrules  and @README.md. Only when satisfied and tested and ran the new changes. And pushing and all the GitHub branching, synching and pushing and committing steps.
+TRY NOT TO MESS UP WHAT ALREADY WORKS.***
+
+
+--------------------------------
+
+## Option 2
+
+
+Can we make the predictions for today "January 19, 2025"? I don't know if we can make predictions for any given date. Plus, lets Run the scraper to update data:
+python nba_scraper.py
+Generate predictions for upcoming games:
+python predict_games.py
+
+About the predictions you will give me, can you give me the confidence percentage. For each and every one of them. Including the spreads and points.
+
+***Finally, IMPORTANT: 
+IMPORTANT: READ EVERYTHING IN THE CODEBASE BEFORE IMPLEMENTING, MINOR CHANGES CAN RUIN ALL THE PROGRESS MADE.
+Remember to keep updating @\Users\Diego\Documents\Github\NBA\.cursorrules  and @README.md. Only when satisfied and tested and ran the new changes. And pushing and all the GitHub branching, synching and pushing and committing steps.
+TRY NOT TO MESS UP WHAT ALREADY WORKS.***
+
+

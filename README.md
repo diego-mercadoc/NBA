@@ -115,10 +115,24 @@ Predictions include:
 python nba_scraper.py
 ```
 
-2. Generate predictions for upcoming games:
+2. Generate predictions for games:
 ```bash
+# For today's games:
 python predict_games.py
+
+# For a specific date:
+python predict_games.py --date YYYY-MM-DD
 ```
+
+The predictions include:
+- Win probabilities for both teams (with confidence levels)
+- Predicted point spreads
+- Over/under predictions
+- First half totals and spreads
+- First quarter totals and spreads
+- Confidence levels for all predictions
+- Enhanced value ratings
+- Non-overlapping parlay suggestions
 
 ### Dependencies
 
@@ -131,6 +145,7 @@ See requirements.txt for a complete list of dependencies.
 - Model accuracy improves as the season progresses
 - Quarter/Half predictions are based on historical patterns
 - Some bet combinations may be restricted by sportsbooks
+- Predictions are only available for dates within the current NBA season
 
 ### Development Roadmap
 

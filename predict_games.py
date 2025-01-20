@@ -5,10 +5,17 @@ from nba_scraper import NBADataScraper
 from nba_predictor import NBAPredictor
 import os
 import shutil
+import argparse
+from datetime import datetime
 
 def main():
-    """Train models and generate predictions for today's games"""
+    """Train models and generate predictions for specified date"""
     try:
+        # Configure argument parser
+        parser = argparse.ArgumentParser(description='Generate NBA game predictions')
+        parser.add_argument('--date', type=str, help='Target date in YYYY-MM-DD format (default: today)')
+        args = parser.parse_args()
+        
         # Configure logging
         logging.basicConfig(
             level=logging.INFO,
@@ -44,18 +51,18 @@ def main():
         logging.info(f"Spread RMSE: {metrics['spread_rmse']:.3f}")
         logging.info(f"Totals RMSE: {metrics['totals_rmse']:.3f}")
         
-        # Get today's games
+        # Get games for target date
         scraper = NBADataScraper(start_season=2021, end_season=2025)
-        today_games = scraper.get_current_games()
+        target_games = scraper.get_current_games(args.date)
         
-        if today_games is not None and not today_games.empty:
-            logging.info(f"\nGenerating predictions for {len(today_games)} games...")
-            predictions = predictor.predict_games(today_games)
+        if target_games is not None and not target_games.empty:
+            logging.info(f"\nGenerating predictions for {len(target_games)} games...")
+            predictions = predictor.predict_games(target_games)
             
             # Get best bets
             best_bets = predictor.get_best_bets(predictions, confidence_threshold=0.65)
             
-            logging.info("\nPredictions for today's games:")
+            logging.info("\nPredictions for games:")
             for pred in predictions['Formatted_Predictions']:
                 logging.info(f"\n{pred}")
             
@@ -96,13 +103,13 @@ def main():
                     for bet in parlay['bets']:
                         logging.info(f"  {bet}")
             else:
-                logging.info("\nNo high-confidence bets found for today's games")
+                logging.info("\nNo high-confidence bets found for the specified date")
             
             # Save predictions
             predictions.to_csv('predictions.csv', index=False)
             logging.info("\nPredictions saved to predictions.csv")
         else:
-            logging.info("No games scheduled for today")
+            logging.info("No games found for the specified date")
         
     except Exception as e:
         logging.error(f"An error occurred: {str(e)}")

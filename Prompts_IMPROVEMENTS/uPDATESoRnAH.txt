@@ -1,0 +1,15 @@
+
+******<Prompt>
+
+Should we include and how?:
+
+1. On/Off Stats: If you need advanced on-court/off-court data, check specialized sources like PBPStats.com or FantasyLabs.
+2. Betting Data: If you plan to compare model predictions with betting lines, incorporate odds from an odds-aggregator (e.g., OddsPortal) or an API.
+
+i WANT MORE CONFIDENCE. ANYTHING ELSE YOU THINK OF AS AN EXPERT.
+
+***Finally, IMPORTANT: 
+Remember to keep updating @\Users\Diego\Documents\Github\NBA\.cursorrules  and @README.md. Only when satisfied and tested and ran the new changes. And pushing and all the GitHub branching, synching and pushing and committing steps.
+TRY NOT TO MESS UP WHAT ALREADY WORKS.***
+Look at the last results we had in the attached image
+</Prompt>******

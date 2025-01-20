@@ -1,0 +1,6 @@
+Continue, with your progress, run the prediction script again.   NOTE: Why don't we drop whatever it's causing us problem, for the sake of everything else to work.
+
+***Finally, IMPORTANT: 
+IMPORTANT: READ EVERYTHING IN THE CODEBASE BEFORE IMPLEMENTING, MINOR CHANGES CAN RUIN ALL THE PROGRESS MADE.
+Remember to keep updating @\Users\Diego\Documents\Github\NBA\.cursorrules  and @README.md. Only when satisfied and tested and ran the new changes. And pushing and all the GitHub branching, synching and pushing and committing steps.
+TRY NOT TO MESS UP WHAT ALREADY WORKS.***
