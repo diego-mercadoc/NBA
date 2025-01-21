@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
+from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold, KFold
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingRegressor, VotingClassifier
 from sklearn.metrics import accuracy_score, mean_squared_error, classification_report, log_loss, brier_score_loss
@@ -13,6 +13,7 @@ import optuna
 import logging
 import joblib
 from datetime import datetime, timedelta
+from sklearn.exceptions import UndefinedMetricWarning, ConvergenceWarning
 
 class NBAPredictor:
     """
@@ -31,10 +32,16 @@ class NBAPredictor:
         self.spread_model = None
         self.totals_model = None
         self.feature_columns = [
+            # Core game stats
             'Home_Points_Scored_Roll5', 'Home_Points_Allowed_Roll5', 'Home_Point_Diff_Roll5',
             'Away_Points_Scored_Roll5', 'Away_Points_Allowed_Roll5', 'Away_Point_Diff_Roll5',
             'Home_Streak', 'Away_Streak', 'Home_Rest_Days', 'Away_Rest_Days',
-            'Home_Win_Rate', 'Away_Win_Rate'
+            'Home_Win_Rate', 'Away_Win_Rate',
+            # Shooting efficiency
+            'Home_eFG_Pct', 'Away_eFG_Pct',
+            # Advanced metrics
+            '3pt_volatility', 'pace_adjusted_offense', 'pace_adjusted_defense',
+            'Win_Rate_Diff', 'Point_Diff_Ratio'
         ]
         
         # Initialize base models (parameters will be optimized)
@@ -43,6 +50,9 @@ class NBAPredictor:
         self.svm_classifier = None
         self.xgb_classifier = None
         self.lgb_classifier = None
+        
+        # Set up cross-validation
+        self.cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
     
     def optimize_hyperparameters(self, X_train, y_train, X_val, y_val, model_type='moneyline'):
         """
@@ -59,112 +69,319 @@ class NBAPredictor:
             dict: Best hyperparameters
         """
         def objective_moneyline(trial):
-            # RandomForest parameters
-            rf_params = {
-                'n_estimators': trial.suggest_int('rf_n_estimators', 100, 1000),
-                'max_depth': trial.suggest_int('rf_max_depth', 5, 30),
-                'min_samples_split': trial.suggest_int('rf_min_samples_split', 2, 20),
-                'min_samples_leaf': trial.suggest_int('rf_min_samples_leaf', 1, 10)
-            }
+            # Reset index to ensure proper indexing in cross-validation
+            X_train_reset = pd.DataFrame(X_train).reset_index(drop=True)
+            y_train_reset = pd.Series(y_train).reset_index(drop=True)
             
-            # XGBoost parameters
-            xgb_params = {
-                'n_estimators': trial.suggest_int('xgb_n_estimators', 100, 500),
-                'max_depth': trial.suggest_int('xgb_max_depth', 3, 15),
-                'learning_rate': trial.suggest_float('xgb_learning_rate', 0.01, 0.3, log=True),
-                'subsample': trial.suggest_float('xgb_subsample', 0.6, 1.0),
-                'colsample_bytree': trial.suggest_float('xgb_colsample_bytree', 0.6, 1.0)
-            }
+            # Create cross-validation folds
+            kf = KFold(n_splits=5, shuffle=True, random_state=42)
+            scores = []
             
-            # LightGBM parameters
-            lgb_params = {
-                'n_estimators': trial.suggest_int('lgb_n_estimators', 100, 500),
-                'max_depth': trial.suggest_int('lgb_max_depth', 3, 15),
-                'learning_rate': trial.suggest_float('lgb_learning_rate', 0.01, 0.3, log=True),
-                'subsample': trial.suggest_float('lgb_subsample', 0.6, 1.0),
-                'colsample_bytree': trial.suggest_float('lgb_colsample_bytree', 0.6, 1.0)
-            }
-            
-            # Initialize and train models
-            rf_model = RandomForestClassifier(**rf_params, random_state=42)
-            xgb_model = xgb.XGBClassifier(**xgb_params, random_state=42)
-            lgb_model = lgb.LGBMClassifier(**lgb_params, random_state=42)
-            
-            # Train models
-            rf_model.fit(X_train, y_train)
-            xgb_model.fit(X_train, y_train)
-            lgb_model.fit(X_train, y_train)
-            
-            # Get predictions
-            rf_proba = rf_model.predict_proba(X_val)
-            xgb_proba = xgb_model.predict_proba(X_val)
-            lgb_proba = lgb_model.predict_proba(X_val)
+            for train_idx, val_idx in kf.split(X_train_reset):
+                X_fold_train, X_fold_val = X_train_reset.iloc[train_idx], X_train_reset.iloc[val_idx]
+                y_fold_train, y_fold_val = y_train_reset.iloc[train_idx], y_train_reset.iloc[val_idx]
+                
+                # RandomForest parameters - refined search space
+                rf_params = {
+                    'n_estimators': trial.suggest_int('rf_n_estimators', 100, 500),
+                    'max_depth': trial.suggest_int('rf_max_depth', 3, 15),
+                    'min_samples_split': trial.suggest_int('rf_min_samples_split', 2, 10),
+                    'min_samples_leaf': trial.suggest_int('rf_min_samples_leaf', 1, 5),
+                    'class_weight': trial.suggest_categorical('rf_class_weight', ['balanced', None])
+                }
+                
+                # XGBoost parameters - refined search space
+                xgb_params = {
+                    'n_estimators': trial.suggest_int('xgb_n_estimators', 100, 500),
+                    'max_depth': trial.suggest_int('xgb_max_depth', 3, 10),
+                    'learning_rate': trial.suggest_float('xgb_learning_rate', 0.01, 0.1, log=True),
+                    'subsample': trial.suggest_float('xgb_subsample', 0.7, 1.0),
+                    'colsample_bytree': trial.suggest_float('xgb_colsample_bytree', 0.7, 1.0),
+                    'min_child_weight': trial.suggest_int('xgb_min_child_weight', 1, 5),
+                    'gamma': trial.suggest_float('xgb_gamma', 0, 0.5)
+                }
+                
+                # LightGBM parameters - refined search space
+                lgb_params = {
+                    'n_estimators': trial.suggest_int('lgb_n_estimators', 100, 500),
+                    'max_depth': trial.suggest_int('lgb_max_depth', 3, 10),
+                    'learning_rate': trial.suggest_float('lgb_learning_rate', 0.01, 0.1, log=True),
+                    'subsample': trial.suggest_float('lgb_subsample', 0.7, 1.0),
+                    'colsample_bytree': trial.suggest_float('lgb_colsample_bytree', 0.7, 1.0),
+                    'num_leaves': trial.suggest_int('lgb_num_leaves', 20, 50),
+                    'min_child_samples': trial.suggest_int('lgb_min_child_samples', 10, 50)
+                }
+                
+                # Initialize models with early stopping
+                rf_model = RandomForestClassifier(**rf_params, random_state=42)
+                xgb_model = xgb.XGBClassifier(**xgb_params, random_state=42, early_stopping_rounds=10)
+                lgb_model = lgb.LGBMClassifier(**lgb_params, random_state=42, early_stopping_rounds=10)
+                
+                # Cross-validation scores for each model
+                cv_scores = []
+                for model in [rf_model, xgb_model, lgb_model]:
+                    cv_scores.append(self._cross_val_score(X_fold_train, y_fold_train, model))
+                
+                # Optimize ensemble weights
+                w1 = trial.suggest_float('w1', 0.1, 2.0)
+                w2 = trial.suggest_float('w2', 0.1, 2.0)
+                w3 = trial.suggest_float('w3', 0.1, 2.0)
+                
+                # Weighted average of model scores
+                ensemble_score = (w1*cv_scores[0] + w2*cv_scores[1] + w3*cv_scores[2]) / (w1 + w2 + w3)
+                
+                # Report intermediate values for pruning
+                trial.report(ensemble_score, step=1)
+                if trial.should_prune():
+                    raise optuna.TrialPruned()
+                
+                scores.append(ensemble_score)
             
             # Optimize ensemble weights
             w1 = trial.suggest_float('w1', 0.1, 2.0)
             w2 = trial.suggest_float('w2', 0.1, 2.0)
             w3 = trial.suggest_float('w3', 0.1, 2.0)
             
-            # Weighted ensemble predictions
-            ensemble_proba = (w1*rf_proba + w2*xgb_proba + w3*lgb_proba) / (w1 + w2 + w3)
+            # Weighted average of model scores
+            ensemble_score = (w1*scores[0] + w2*scores[1] + w3*scores[2]) / (w1 + w2 + w3)
             
-            # Calculate metrics
-            brier = brier_score_loss(y_val, ensemble_proba[:, 1])
-            log_loss_val = log_loss(y_val, ensemble_proba)
-            accuracy = accuracy_score(y_val, ensemble_proba[:, 1] > 0.5)
+            # Report intermediate values for pruning
+            trial.report(ensemble_score, step=1)
+            if trial.should_prune():
+                raise optuna.TrialPruned()
             
-            # Combine metrics (minimize negative log loss and brier score, maximize accuracy)
-            return -0.4 * log_loss_val - 0.4 * brier + 0.2 * accuracy
+            return ensemble_score
         
         def objective_regression(trial):
             if model_type == 'spread':
                 params = {
                     'n_estimators': trial.suggest_int('n_estimators', 100, 500),
-                    'max_depth': trial.suggest_int('max_depth', 3, 15),
-                    'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3, log=True),
-                    'subsample': trial.suggest_float('subsample', 0.6, 1.0),
-                    'colsample_bytree': trial.suggest_float('colsample_bytree', 0.6, 1.0),
-                    'min_child_weight': trial.suggest_int('min_child_weight', 1, 7)
+                    'max_depth': trial.suggest_int('max_depth', 3, 10),
+                    'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.1, log=True),
+                    'subsample': trial.suggest_float('subsample', 0.7, 1.0),
+                    'colsample_bytree': trial.suggest_float('colsample_bytree', 0.7, 1.0),
+                    'min_child_weight': trial.suggest_int('min_child_weight', 1, 5),
+                    'gamma': trial.suggest_float('gamma', 0, 0.5),
+                    'reg_alpha': trial.suggest_float('reg_alpha', 0, 1.0),
+                    'reg_lambda': trial.suggest_float('reg_lambda', 0, 1.0)
                 }
                 
-                model = xgb.XGBRegressor(**params, random_state=42)
+                model = xgb.XGBRegressor(**params, random_state=42, early_stopping_rounds=10)
             else:  # totals
                 params = {
                     'n_estimators': trial.suggest_int('n_estimators', 100, 500),
-                    'max_depth': trial.suggest_int('max_depth', 3, 15),
-                    'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3, log=True),
-                    'subsample': trial.suggest_float('subsample', 0.6, 1.0),
-                    'colsample_bytree': trial.suggest_float('colsample_bytree', 0.6, 1.0),
-                    'num_leaves': trial.suggest_int('num_leaves', 20, 100)
+                    'max_depth': trial.suggest_int('max_depth', 3, 10),
+                    'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.1, log=True),
+                    'subsample': trial.suggest_float('subsample', 0.7, 1.0),
+                    'colsample_bytree': trial.suggest_float('colsample_bytree', 0.7, 1.0),
+                    'num_leaves': trial.suggest_int('num_leaves', 20, 50),
+                    'min_child_samples': trial.suggest_int('min_child_samples', 10, 50),
+                    'reg_alpha': trial.suggest_float('reg_alpha', 0, 1.0),
+                    'reg_lambda': trial.suggest_float('reg_lambda', 0, 1.0)
                 }
                 
-                model = lgb.LGBMRegressor(**params, random_state=42)
+                model = lgb.LGBMRegressor(**params, random_state=42, early_stopping_rounds=10)
             
-            # Cross-validation for more robust evaluation
-            cv_scores = cross_val_score(
-                model, X_train, y_train,
-                cv=5, scoring='neg_root_mean_squared_error'
-            )
+            # Cross-validation with early stopping
+            cv_scores = []
+            for train_idx, val_idx in self.cv.split(X_train, y_train):
+                X_fold_train, X_fold_val = X_train[train_idx], X_train[val_idx]
+                y_fold_train, y_fold_val = y_train[train_idx], y_train[val_idx]
+                
+                if isinstance(model, xgb.XGBRegressor):
+                    model.fit(
+                        X_fold_train, y_fold_train,
+                        eval_set=[(X_fold_val, y_fold_val)],
+                        verbose=False
+                    )
+                else:  # LightGBM
+                    model.fit(
+                        X_fold_train, y_fold_train,
+                        eval_set=[(X_fold_val, y_fold_val)],
+                        callbacks=[lgb.early_stopping(10)]
+                    )
+                
+                y_pred = model.predict(X_fold_val)
+                rmse = np.sqrt(mean_squared_error(y_fold_val, y_pred))
+                cv_scores.append(-rmse)  # Negative because we want to maximize
             
-            return cv_scores.mean()
+            mean_score = np.mean(cv_scores)
+            
+            # Report intermediate values for pruning
+            trial.report(mean_score, step=1)
+            if trial.should_prune():
+                raise optuna.TrialPruned()
+            
+            return mean_score
         
-        # Create study
+        # Create study with pruning
+        pruner = optuna.pruners.MedianPruner(
+            n_startup_trials=5,
+            n_warmup_steps=5,
+            interval_steps=1
+        )
+        
         if model_type == 'moneyline':
-            study = optuna.create_study(direction='maximize')
+            study = optuna.create_study(
+                direction='maximize',
+                pruner=pruner,
+                study_name='moneyline_optimization'
+            )
             objective = objective_moneyline
         else:
-            study = optuna.create_study(direction='maximize')
+            study = optuna.create_study(
+                direction='maximize',
+                pruner=pruner,
+                study_name=f'{model_type}_optimization'
+            )
             objective = objective_regression
         
-        # Optimize
+        # Optimize with callbacks for logging
+        def logging_callback(study, trial):
+            if trial.number % 10 == 0:
+                logging.info(f'Trial {trial.number}: Current best score = {study.best_value:.4f}')
+        
         n_trials = 50 if model_type == 'moneyline' else 30
-        study.optimize(objective, n_trials=n_trials)
+        study.optimize(
+            objective,
+            n_trials=n_trials,
+            callbacks=[logging_callback],
+            show_progress_bar=True
+        )
+        
+        # Log optimization results
+        logging.info(f"\nBest trial for {model_type}:")
+        logging.info(f"  Value: {study.best_value:.4f}")
+        logging.info("  Params:")
+        for key, value in study.best_params.items():
+            logging.info(f"    {key}: {value}")
         
         return study.best_params
     
     def prepare_features(self, games_df):
         """Prepare features for ML models with enhanced engineering"""
         df = games_df.copy()
+        
+        # Load team stats
+        try:
+            team_stats = pd.read_csv('nba_team_stats_all.csv')
+            
+            # Check available columns
+            available_cols = ['Team', 'Season', 'ORtg', 'DRtg', 'Pace']
+            if 'eFG_Pct' in team_stats.columns:
+                available_cols.append('eFG_Pct')
+            if 'eFG_Pct_Allowed' in team_stats.columns:
+                available_cols.append('eFG_Pct_Allowed')
+            if '3P_Pct' in team_stats.columns:
+                available_cols.append('3P_Pct')
+            if '3pt_variance' in team_stats.columns:
+                available_cols.append('3pt_variance')
+            
+            # Merge home team stats
+            df = df.merge(
+                team_stats[available_cols],
+                left_on=['Home_Team', 'Season'],
+                right_on=['Team', 'Season'],
+                how='left',
+                suffixes=('', '_home')
+            )
+            
+            # Rename columns
+            if 'eFG_Pct' in available_cols:
+                df = df.rename(columns={'eFG_Pct': 'Home_eFG_Pct'})
+            if 'eFG_Pct_Allowed' in available_cols:
+                df = df.rename(columns={'eFG_Pct_Allowed': 'Home_eFG_Pct_Allowed'})
+            if '3P_Pct' in available_cols:
+                df = df.rename(columns={'3P_Pct': 'Home_3P_Pct'})
+            if '3pt_variance' in available_cols:
+                df = df.rename(columns={'3pt_variance': 'Home_3pt_variance'})
+            if 'ORtg' in available_cols:
+                df = df.rename(columns={'ORtg': 'Home_ORtg'})
+            if 'DRtg' in available_cols:
+                df = df.rename(columns={'DRtg': 'Home_DRtg'})
+            if 'Pace' in available_cols:
+                df = df.rename(columns={'Pace': 'Home_Pace'})
+            
+            # Merge away team stats
+            df = df.merge(
+                team_stats[available_cols],
+                left_on=['Away_Team', 'Season'],
+                right_on=['Team', 'Season'],
+                how='left',
+                suffixes=('', '_away')
+            )
+            
+            # Rename columns
+            if 'eFG_Pct' in available_cols:
+                df = df.rename(columns={'eFG_Pct': 'Away_eFG_Pct'})
+            if 'eFG_Pct_Allowed' in available_cols:
+                df = df.rename(columns={'eFG_Pct_Allowed': 'Away_eFG_Pct_Allowed'})
+            if '3P_Pct' in available_cols:
+                df = df.rename(columns={'3P_Pct': 'Away_3P_Pct'})
+            if '3pt_variance' in available_cols:
+                df = df.rename(columns={'3pt_variance': 'Away_3pt_variance'})
+            if 'ORtg' in available_cols:
+                df = df.rename(columns={'ORtg': 'Away_ORtg'})
+            if 'DRtg' in available_cols:
+                df = df.rename(columns={'DRtg': 'Away_DRtg'})
+            if 'Pace' in available_cols:
+                df = df.rename(columns={'Pace': 'Away_Pace'})
+            
+            # Drop redundant columns
+            df = df.drop(['Team_home', 'Team_away'], axis=1, errors='ignore')
+            
+            # Set default values for missing columns
+            if 'Home_eFG_Pct' not in df.columns:
+                df['Home_eFG_Pct'] = 0.5  # League average approximation
+            if 'Away_eFG_Pct' not in df.columns:
+                df['Away_eFG_Pct'] = 0.5
+            if 'Home_eFG_Pct_Allowed' not in df.columns:
+                df['Home_eFG_Pct_Allowed'] = 0.5
+            if 'Away_eFG_Pct_Allowed' not in df.columns:
+                df['Away_eFG_Pct_Allowed'] = 0.5
+            if 'Home_3P_Pct' not in df.columns:
+                df['Home_3P_Pct'] = 0.35  # League average approximation
+            if 'Away_3P_Pct' not in df.columns:
+                df['Away_3P_Pct'] = 0.35
+            if 'Home_3pt_variance' not in df.columns:
+                df['Home_3pt_variance'] = 0.05  # Reasonable default
+            if 'Away_3pt_variance' not in df.columns:
+                df['Away_3pt_variance'] = 0.05
+            if 'Home_ORtg' not in df.columns:
+                df['Home_ORtg'] = 110.0  # League average approximation
+            if 'Away_ORtg' not in df.columns:
+                df['Away_ORtg'] = 110.0
+            if 'Home_DRtg' not in df.columns:
+                df['Home_DRtg'] = 110.0
+            if 'Away_DRtg' not in df.columns:
+                df['Away_DRtg'] = 110.0
+            if 'Home_Pace' not in df.columns:
+                df['Home_Pace'] = 100.0  # League average approximation
+            if 'Away_Pace' not in df.columns:
+                df['Away_Pace'] = 100.0
+            
+            # Fill NaN values with league averages
+            for col in df.columns:
+                if col.endswith('_Pct') or col.endswith('_variance'):
+                    df[col] = df[col].fillna(df[col].mean())
+                elif col.endswith('Rtg') or col.endswith('Pace'):
+                    df[col] = df[col].fillna(df[col].mean())
+        except Exception as e:
+            logging.warning(f"Error loading team stats: {str(e)}. Using default values.")
+            df['Home_eFG_Pct'] = 0.5
+            df['Away_eFG_Pct'] = 0.5
+            df['Home_eFG_Pct_Allowed'] = 0.5
+            df['Away_eFG_Pct_Allowed'] = 0.5
+            df['Home_3P_Pct'] = 0.35
+            df['Away_3P_Pct'] = 0.35
+            df['Home_3pt_variance'] = 0.05
+            df['Away_3pt_variance'] = 0.05
+            df['Home_ORtg'] = 110.0
+            df['Away_ORtg'] = 110.0
+            df['Home_DRtg'] = 110.0
+            df['Away_DRtg'] = 110.0
+            df['Home_Pace'] = 100.0
+            df['Away_Pace'] = 100.0
         
         # Calculate win/loss columns
         df['Home_Win'] = (df['Home_Points'] > df['Away_Points']).astype(int)
@@ -185,6 +402,18 @@ class NBAPredictor:
         
         # Enhanced feature engineering
         df['Win_Rate_Diff'] = df['Home_Win_Rate'] - df['Away_Win_Rate']
+        
+        # Calculate eFG% mismatch (offensive and defensive)
+        df['efg_mismatch_offense'] = df['Home_eFG_Pct'] - df['Away_eFG_Pct']
+        df['efg_mismatch_defense'] = df['Away_eFG_Pct_Allowed'] - df['Home_eFG_Pct_Allowed']
+        df['efg_mismatch'] = df['efg_mismatch_offense'] + df['efg_mismatch_defense']
+        
+        # New 3-point volatility feature
+        df['3pt_volatility'] = df['Home_3pt_variance'] - df['Away_3pt_variance']
+        
+        # New pace-adjusted metrics
+        df['pace_adjusted_offense'] = df['Home_ORtg'] * df['Home_Pace'] / 100
+        df['pace_adjusted_defense'] = df['Away_DRtg'] * df['Away_Pace'] / 100
         
         # Handle potential division by zero or NaN
         df['Away_Point_Diff_Roll5'] = df['Away_Point_Diff_Roll5'].fillna(0)
@@ -217,12 +446,14 @@ class NBAPredictor:
         # Interaction features
         df['Win_Rate_Rest_Interaction'] = df['Win_Rate_Diff'] * df['Rest_Advantage']
         df['Streak_Form_Interaction'] = df['Streak_Advantage'] * df['Recent_Form_Ratio']
+        df['eFG_Rest_Interaction'] = df['efg_mismatch'] * df['Rest_Advantage']
         
         # Fill remaining NaN values with 0
         feature_cols = self.feature_columns + [
-            'Win_Rate_Diff', 'Point_Diff_Ratio', 'Rest_Advantage',
-            'Streak_Advantage', 'Recent_Form_Ratio', 'Win_Rate_Rest_Interaction',
-            'Streak_Form_Interaction'
+            'Rest_Advantage', 'Streak_Advantage', 'Recent_Form_Ratio',
+            'Win_Rate_Rest_Interaction', 'Streak_Form_Interaction',
+            'efg_mismatch', 'efg_mismatch_offense', 'efg_mismatch_defense',
+            'eFG_Rest_Interaction'
         ]
         X = df[feature_cols].fillna(0)
         
@@ -257,7 +488,11 @@ class NBAPredictor:
             X, y_totals, test_size=test_size, random_state=42
         )
         
-        # Scale features
+        # Scale features with updated NaN handling
+        self.scaler = StandardScaler(copy=True, with_mean=True, with_std=True)
+        # Fill NaN values before scaling
+        X_train = pd.DataFrame(X_train).fillna(0)
+        X_test = pd.DataFrame(X_test).fillna(0)
         X_train_scaled = self.scaler.fit_transform(X_train)
         X_test_scaled = self.scaler.transform(X_test)
         
@@ -284,7 +519,9 @@ class NBAPredictor:
             learning_rate=ml_params['xgb_learning_rate'],
             subsample=ml_params['xgb_subsample'],
             colsample_bytree=ml_params['xgb_colsample_bytree'],
-            random_state=42
+            random_state=42,
+            use_label_encoder=False,
+            eval_metric='logloss'
         )
         
         self.lgb_classifier = lgb.LGBMClassifier(
@@ -298,17 +535,28 @@ class NBAPredictor:
         
         # Train moneyline models with calibration
         logging.info("Training calibrated moneyline models...")
-        self.rf_classifier = CalibratedClassifierCV(
-            self.rf_classifier, cv=5, method='sigmoid'
-        ).fit(X_train_scaled, y_ml_train)
-        
-        self.xgb_classifier = CalibratedClassifierCV(
-            self.xgb_classifier, cv=5, method='sigmoid'
-        ).fit(X_train_scaled, y_ml_train)
-        
-        self.lgb_classifier = CalibratedClassifierCV(
-            self.lgb_classifier, cv=5, method='sigmoid'
-        ).fit(X_train_scaled, y_ml_train)
+        try:
+            # Train base models first
+            self.rf_classifier.fit(X_train_scaled, y_ml_train)
+            self.xgb_classifier.fit(X_train_scaled, y_ml_train)
+            self.lgb_classifier.fit(X_train_scaled, y_ml_train)
+
+            # Then calibrate them
+            self.rf_classifier = CalibratedClassifierCV(
+                self.rf_classifier, cv='prefit', method='sigmoid'
+            ).fit(X_train_scaled, y_ml_train)
+
+            self.xgb_classifier = CalibratedClassifierCV(
+                self.xgb_classifier, cv='prefit', method='sigmoid'
+            ).fit(X_train_scaled, y_ml_train)
+
+            self.lgb_classifier = CalibratedClassifierCV(
+                self.lgb_classifier, cv='prefit', method='sigmoid'
+            ).fit(X_train_scaled, y_ml_train)
+
+        except (UndefinedMetricWarning, ConvergenceWarning) as e:
+            logging.warning(f"Warning during model calibration: {str(e)}")
+            logging.info("Proceeding with uncalibrated models...")
         
         # Get predictions from all models
         rf_proba = self.rf_classifier.predict_proba(X_test_scaled)
@@ -594,4 +842,29 @@ class NBAPredictor:
             else:
                 base_value *= 0.8
         
-        return min(base_value * 0.90, 1.0)  # Lower confidence for quarters 
+        return min(base_value * 0.90, 1.0)  # Lower confidence for quarters
+    
+    def _cross_val_score(self, X_train, y_train, model):
+        """Calculate cross-validation score for a model."""
+        if isinstance(model, xgb.XGBClassifier):
+            model.fit(
+                X_train, y_train,
+                eval_set=[(X_train, y_train)],
+                verbose=False
+            )
+        elif isinstance(model, lgb.LGBMClassifier):
+            model.fit(
+                X_train, y_train,
+                eval_set=[(X_train, y_train)],
+                callbacks=[lgb.early_stopping(10)]
+            )
+        else:
+            model.fit(X_train, y_train)
+        
+        proba = model.predict_proba(X_train)
+        accuracy = accuracy_score(y_train, proba[:, 1] > 0.5)
+        log_loss_val = log_loss(y_train, proba)
+        brier = brier_score_loss(y_train, proba[:, 1])
+        
+        # Combined metric
+        return 0.4 * accuracy - 0.3 * log_loss_val - 0.3 * brier 

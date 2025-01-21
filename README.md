@@ -45,6 +45,14 @@ Latest model metrics (as of January 18, 2025):
   - Confidence capped at 95%
 
 ### Enhanced Features
+- **3-Point Volatility**: Measures team shooting consistency vs opponent defense
+  - Rolling 10-game standard deviation of 3P%
+  - Identifies teams with stable vs streaky shooting
+  - Used to adjust confidence in predictions
+- **Pace-Adjusted Metrics**: Combines offensive/defensive ratings with tempo
+  - Normalizes team performance by possessions
+  - Better captures true offensive/defensive efficiency
+  - Improves accuracy of totals predictions
 - Ensemble learning combining Random Forest, XGBoost, and LightGBM models
 - Bayesian optimization for all model hyperparameters
 - Season-based weighting for training data
@@ -73,6 +81,9 @@ Latest model metrics (as of January 18, 2025):
 - Enhanced metric tracking and model history
 - Improved ensemble weighting through optimization
 - Enhanced error handling and NaN value processing
+- Implemented 3-point shooting variance analysis
+- Added pace-adjusted performance metrics
+- Enhanced feature engineering pipeline
 
 ## Development Roadmap
 1. **Data Quality & Storage** (In Progress)
@@ -119,6 +130,8 @@ The scraper collects:
 - Historical statistics
 - Current season data
 - Quarter-by-quarter scoring patterns
+- 3-point shooting statistics
+- Pace and efficiency metrics
 
 ### Prediction System
 
@@ -130,21 +143,33 @@ The system uses specialized models for different markets:
    - LightGBM Classifier (Bayesian optimized)
    - Optimized ensemble weights
    - Probability calibration
+   - Enhanced feature engineering:
+     * Win rates with exponential weighting
+     * 3-point shooting variance analysis
+     * Pace-adjusted performance metrics
+     * Rest advantage with diminishing returns
+     * Streak impact with momentum consideration
+     * Recent performance weighting (last 3 games)
 
 2. Enhanced Spread Model:
    - XGBoost Regressor
    - Bayesian hyperparameter optimization
    - Cross-validation for robustness
+   - Incorporates pace-adjusted metrics
+   - Accounts for shooting variance
 
 3. Improved Totals Model:
    - LightGBM Regressor
    - Bayesian hyperparameter optimization
    - Advanced feature engineering
+   - Pace-normalized scoring projections
+   - 3-point variance consideration
 
 4. First Half/Quarter Models:
    - Historical pattern analysis
    - Scoring distribution modeling
    - Pace-adjusted predictions
+   - Shooting variance impact analysis
 
 Predictions include:
 - Win probabilities for both teams (calibrated)
@@ -173,6 +198,8 @@ Predictions include:
    - Team performance indicators
    - Win rates and streaks
    - Rest days between games
+   - 3-point shooting variance
+   - Pace-adjusted ratings
 
 2. Enhanced Features:
    - Win Rate Differential
@@ -182,6 +209,8 @@ Predictions include:
    - Recent Form Ratio
    - Win Rate-Rest Interaction
    - Streak-Form Interaction
+   - 3-Point Volatility
+   - Pace-Adjusted Offense/Defense
 
 #### Model Architecture
 1. Moneyline Ensemble:

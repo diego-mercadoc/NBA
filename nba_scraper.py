@@ -540,51 +540,18 @@ class NBADataScraper:
         return None
     
     def get_team_stats(self, season):
-        """
-        Scrape advanced team stats for a specific season.
-        
-        Args:
-            season (int): NBA season year
-            
-        Returns:
-            pd.DataFrame: DataFrame with team stats if successful, None otherwise
-        """
+        """Scrape advanced team stats for a specific season"""
         url = f"https://www.basketball-reference.com/leagues/NBA_{season}.html"
         try:
-            logging.info(f"Fetching team stats from {url}")
-            dfs = self._make_request(url)
+            print(f"Fetching {url}")
+            dfs = pd.read_html(url)
             
-            # Debug logging
-            logging.info(f"Found {len(dfs)} tables on the page")
-            
-            # Try to find the advanced stats table
-            advanced_stats_table = None
-            for i, df in enumerate(dfs):
-                if isinstance(df.columns, pd.MultiIndex):
-                    # For multi-index columns, check second level if it exists
-                    col_names = [col[1] if isinstance(col, tuple) else col for col in df.columns]
-                else:
-                    col_names = df.columns
+            # The advanced stats are in table 10
+            if len(dfs) > 10:
+                df = dfs[10]
                 
-                if 'ORtg' in col_names or 'DRtg' in col_names:
-                    logging.info(f"Found advanced stats in table {i}")
-                    advanced_stats_table = df
-                    break
-            
-            if advanced_stats_table is not None:
-                df = advanced_stats_table
-                
-                # Handle multi-index columns
-                if isinstance(df.columns, pd.MultiIndex):
-                    # For columns that are part of 'Offense Four Factors' or 'Defense Four Factors'
-                    # use both levels, otherwise just use the second level
-                    df.columns = [
-                        f"{col[0]}_{col[1]}" if 'Four Factors' in str(col[0]) else col[1]
-                        for col in df.columns
-                    ]
-                
-                # Debug logging
-                logging.info(f"Processed columns: {df.columns.tolist()}")
+                # Clean up the column names
+                df.columns = [col[1] if isinstance(col, tuple) else col for col in df.columns]
                 
                 # Map the columns we want
                 col_map = {
@@ -596,10 +563,16 @@ class NBADataScraper:
                     'Pace': 'Pace',
                     'SRS': 'SRS',
                     'Offense Four Factors_eFG%': 'eFG_Pct',
+                    'Defense Four Factors_eFG%': 'eFG_Pct_Allowed',
                     'Offense Four Factors_TOV%': 'TOV_Pct',
+                    'Defense Four Factors_TOV%': 'TOV_Pct_Allowed',
                     'Offense Four Factors_ORB%': 'ORB_Pct',
+                    'Defense Four Factors_DRB%': 'DRB_Pct',
                     'Offense Four Factors_FT/FGA': 'FT_Rate'
                 }
+                
+                # Debug logging
+                logging.info(f"Available columns before mapping: {df.columns.tolist()}")
                 
                 # Rename columns
                 df = df.rename(columns=col_map)
@@ -613,11 +586,44 @@ class NBADataScraper:
                 # Normalize team names
                 df['Team'] = df['Team'].replace(self.team_name_map)
                 
+                # Get shooting stats from the shooting table (usually table 4)
+                if len(dfs) > 4:
+                    shooting_df = dfs[4]
+                    shooting_df.columns = [col[1] if isinstance(col, tuple) else col for col in shooting_df.columns]
+                    
+                    # Map shooting columns
+                    shooting_cols = {
+                        'Team': 'Team',
+                        '3P%': '3P_Pct',
+                        '3PA': '3PA_Per_Game'
+                    }
+                    
+                    # Rename and select shooting columns
+                    shooting_df = shooting_df.rename(columns=shooting_cols)
+                    shooting_df = shooting_df[list(shooting_cols.values())]
+                    
+                    # Normalize team names in shooting data
+                    shooting_df['Team'] = shooting_df['Team'].replace(self.team_name_map)
+                    
+                    # Remove League Average rows
+                    shooting_df = shooting_df[~shooting_df['Team'].str.contains('League Average|Division', na=False)]
+                    
+                    # Convert percentages to decimals
+                    shooting_df['3P_Pct'] = pd.to_numeric(shooting_df['3P_Pct'], errors='coerce') / 100
+                    shooting_df['3PA_Per_Game'] = pd.to_numeric(shooting_df['3PA_Per_Game'], errors='coerce')
+                    
+                    # Calculate 3-point variance (rolling 10-game standard deviation)
+                    df = df.merge(shooting_df, on='Team', how='left')
+                    
+                    # Calculate 3-point variance using the rolling window
+                    df['3pt_variance'] = df.groupby('Team')['3P_Pct'].transform(lambda x: x.rolling(10, min_periods=5).std())
+                
                 # Select and reorder columns
                 keep_cols = [
                     'Team', 'Season', 'Wins', 'Losses', 
                     'ORtg', 'DRtg', 'Pace', 'SRS',
-                    'eFG_Pct', 'TOV_Pct', 'ORB_Pct', 'FT_Rate'
+                    'eFG_Pct', 'eFG_Pct_Allowed', 'TOV_Pct', 'TOV_Pct_Allowed',
+                    'ORB_Pct', 'DRB_Pct', 'FT_Rate', '3P_Pct', '3PA_Per_Game', '3pt_variance'
                 ]
                 
                 # Only keep columns that exist
@@ -628,8 +634,12 @@ class NBADataScraper:
                 numeric_cols = [col for col in keep_cols if col not in ['Team', 'Season']]
                 for col in numeric_cols:
                     df[col] = pd.to_numeric(df[col], errors='coerce')
+                    # Convert percentages to decimals if needed
+                    if 'Pct' in col and df[col].max() > 1:
+                        df[col] = df[col] / 100
                 
                 logging.info(f"Successfully scraped team stats for season {season}")
+                logging.info(f"Final columns: {df.columns.tolist()}")
                 return df
             
             logging.warning(f"Could not find advanced stats table at {url}")
@@ -730,7 +740,6 @@ class NBADataScraper:
                                     (home_games[home_col].mean() * len(home_games) +
                                      away_games[away_col].mean() * len(away_games))
                                     / (len(home_games) + len(away_games))
-                                )
                                 
                                 points_against = (
                                     (home_games[away_col].mean() * len(home_games) +
