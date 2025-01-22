@@ -2,6 +2,12 @@
 
 A Python-based NBA data scraper and prediction system that collects game data and generates betting insights using ensemble machine learning models.
 
+## Known Issues
+- Model training stability improvements in progress
+- Temporary timeout increases during validation
+- Enhanced feature validation being implemented
+- Memory optimization updates ongoing
+
 ## Model Performance
 
 Latest model metrics (as of January 18, 2025):

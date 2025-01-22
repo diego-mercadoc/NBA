@@ -14,6 +14,8 @@ import logging
 import joblib
 from datetime import datetime, timedelta
 from sklearn.exceptions import UndefinedMetricWarning, ConvergenceWarning
+from xgboost import XGBClassifier
+from lightgbm import LGBMClassifier
 
 class NBAPredictor:
     """
@@ -41,7 +43,12 @@ class NBAPredictor:
             'Home_eFG_Pct', 'Away_eFG_Pct',
             # Advanced metrics
             '3pt_volatility', 'pace_adjusted_offense', 'pace_adjusted_defense',
-            'Win_Rate_Diff', 'Point_Diff_Ratio'
+            'Win_Rate_Diff', 'Point_Diff_Ratio',
+            # New features
+            'Rest_Day_Differential', 'Streak_Momentum',
+            'Opponent_Strength_Home', 'Opponent_Strength_Away',
+            'Recent_Form_Home', 'Recent_Form_Away',
+            'Home_Road_Differential'
         ]
         
         # Initialize base models (parameters will be optimized)
@@ -50,414 +57,211 @@ class NBAPredictor:
         self.svm_classifier = None
         self.xgb_classifier = None
         self.lgb_classifier = None
-        
+    
         # Set up cross-validation
         self.cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
     
-    def optimize_hyperparameters(self, X_train, y_train, X_val, y_val, model_type='moneyline'):
-        """
-        Optimize hyperparameters using Optuna for different model types.
-        
-        Args:
-            X_train: Training features
-            y_train: Training labels
-            X_val: Validation features
-            y_val: Validation labels
-            model_type: Type of model to optimize ('moneyline', 'spread', 'totals')
-            
-        Returns:
-            dict: Best hyperparameters
-        """
-        def objective_moneyline(trial):
-            # Reset index to ensure proper indexing in cross-validation
-            X_train_reset = pd.DataFrame(X_train).reset_index(drop=True)
-            y_train_reset = pd.Series(y_train).reset_index(drop=True)
-            
-            # Create cross-validation folds
-            kf = KFold(n_splits=5, shuffle=True, random_state=42)
-            scores = []
-            
-            for train_idx, val_idx in kf.split(X_train_reset):
-                X_fold_train, X_fold_val = X_train_reset.iloc[train_idx], X_train_reset.iloc[val_idx]
-                y_fold_train, y_fold_val = y_train_reset.iloc[train_idx], y_train_reset.iloc[val_idx]
-                
-                # RandomForest parameters - refined search space
-                rf_params = {
-                    'n_estimators': trial.suggest_int('rf_n_estimators', 100, 500),
-                    'max_depth': trial.suggest_int('rf_max_depth', 3, 15),
-                    'min_samples_split': trial.suggest_int('rf_min_samples_split', 2, 10),
-                    'min_samples_leaf': trial.suggest_int('rf_min_samples_leaf', 1, 5),
-                    'class_weight': trial.suggest_categorical('rf_class_weight', ['balanced', None])
-                }
-                
-                # XGBoost parameters - refined search space
-                xgb_params = {
-                    'n_estimators': trial.suggest_int('xgb_n_estimators', 100, 500),
-                    'max_depth': trial.suggest_int('xgb_max_depth', 3, 10),
-                    'learning_rate': trial.suggest_float('xgb_learning_rate', 0.01, 0.1, log=True),
-                    'subsample': trial.suggest_float('xgb_subsample', 0.7, 1.0),
-                    'colsample_bytree': trial.suggest_float('xgb_colsample_bytree', 0.7, 1.0),
-                    'min_child_weight': trial.suggest_int('xgb_min_child_weight', 1, 5),
-                    'gamma': trial.suggest_float('xgb_gamma', 0, 0.5)
-                }
-                
-                # LightGBM parameters - refined search space
-                lgb_params = {
-                    'n_estimators': trial.suggest_int('lgb_n_estimators', 100, 500),
-                    'max_depth': trial.suggest_int('lgb_max_depth', 3, 10),
-                    'learning_rate': trial.suggest_float('lgb_learning_rate', 0.01, 0.1, log=True),
-                    'subsample': trial.suggest_float('lgb_subsample', 0.7, 1.0),
-                    'colsample_bytree': trial.suggest_float('lgb_colsample_bytree', 0.7, 1.0),
-                    'num_leaves': trial.suggest_int('lgb_num_leaves', 20, 50),
-                    'min_child_samples': trial.suggest_int('lgb_min_child_samples', 10, 50)
-                }
-                
-                # Initialize models with early stopping
-                rf_model = RandomForestClassifier(**rf_params, random_state=42)
-                xgb_model = xgb.XGBClassifier(**xgb_params, random_state=42, early_stopping_rounds=10)
-                lgb_model = lgb.LGBMClassifier(**lgb_params, random_state=42, early_stopping_rounds=10)
-                
-                # Cross-validation scores for each model
-                cv_scores = []
-                for model in [rf_model, xgb_model, lgb_model]:
-                    cv_scores.append(self._cross_val_score(X_fold_train, y_fold_train, model))
-                
-                # Optimize ensemble weights
-                w1 = trial.suggest_float('w1', 0.1, 2.0)
-                w2 = trial.suggest_float('w2', 0.1, 2.0)
-                w3 = trial.suggest_float('w3', 0.1, 2.0)
-                
-                # Weighted average of model scores
-                ensemble_score = (w1*cv_scores[0] + w2*cv_scores[1] + w3*cv_scores[2]) / (w1 + w2 + w3)
-                
-                # Report intermediate values for pruning
-                trial.report(ensemble_score, step=1)
-                if trial.should_prune():
-                    raise optuna.TrialPruned()
-                
-                scores.append(ensemble_score)
-            
-            # Optimize ensemble weights
-            w1 = trial.suggest_float('w1', 0.1, 2.0)
-            w2 = trial.suggest_float('w2', 0.1, 2.0)
-            w3 = trial.suggest_float('w3', 0.1, 2.0)
-            
-            # Weighted average of model scores
-            ensemble_score = (w1*scores[0] + w2*scores[1] + w3*scores[2]) / (w1 + w2 + w3)
-            
-            # Report intermediate values for pruning
-            trial.report(ensemble_score, step=1)
-            if trial.should_prune():
-                raise optuna.TrialPruned()
-            
-            return ensemble_score
-        
-        def objective_regression(trial):
-            if model_type == 'spread':
-                params = {
-                    'n_estimators': trial.suggest_int('n_estimators', 100, 500),
-                    'max_depth': trial.suggest_int('max_depth', 3, 10),
-                    'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.1, log=True),
-                    'subsample': trial.suggest_float('subsample', 0.7, 1.0),
-                    'colsample_bytree': trial.suggest_float('colsample_bytree', 0.7, 1.0),
-                    'min_child_weight': trial.suggest_int('min_child_weight', 1, 5),
-                    'gamma': trial.suggest_float('gamma', 0, 0.5),
-                    'reg_alpha': trial.suggest_float('reg_alpha', 0, 1.0),
-                    'reg_lambda': trial.suggest_float('reg_lambda', 0, 1.0)
-                }
-                
-                model = xgb.XGBRegressor(**params, random_state=42, early_stopping_rounds=10)
-            else:  # totals
-                params = {
-                    'n_estimators': trial.suggest_int('n_estimators', 100, 500),
-                    'max_depth': trial.suggest_int('max_depth', 3, 10),
-                    'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.1, log=True),
-                    'subsample': trial.suggest_float('subsample', 0.7, 1.0),
-                    'colsample_bytree': trial.suggest_float('colsample_bytree', 0.7, 1.0),
-                    'num_leaves': trial.suggest_int('num_leaves', 20, 50),
-                    'min_child_samples': trial.suggest_int('min_child_samples', 10, 50),
-                    'reg_alpha': trial.suggest_float('reg_alpha', 0, 1.0),
-                    'reg_lambda': trial.suggest_float('reg_lambda', 0, 1.0)
-                }
-                
-                model = lgb.LGBMRegressor(**params, random_state=42, early_stopping_rounds=10)
-            
-            # Cross-validation with early stopping
-            cv_scores = []
-            for train_idx, val_idx in self.cv.split(X_train, y_train):
-                X_fold_train, X_fold_val = X_train[train_idx], X_train[val_idx]
-                y_fold_train, y_fold_val = y_train[train_idx], y_train[val_idx]
-                
-                if isinstance(model, xgb.XGBRegressor):
-                    model.fit(
-                        X_fold_train, y_fold_train,
-                        eval_set=[(X_fold_val, y_fold_val)],
-                        verbose=False
-                    )
-                else:  # LightGBM
-                    model.fit(
-                        X_fold_train, y_fold_train,
-                        eval_set=[(X_fold_val, y_fold_val)],
-                        callbacks=[lgb.early_stopping(10)]
-                    )
-                
-                y_pred = model.predict(X_fold_val)
-                rmse = np.sqrt(mean_squared_error(y_fold_val, y_pred))
-                cv_scores.append(-rmse)  # Negative because we want to maximize
-            
-            mean_score = np.mean(cv_scores)
-            
-            # Report intermediate values for pruning
-            trial.report(mean_score, step=1)
-            if trial.should_prune():
-                raise optuna.TrialPruned()
-            
-            return mean_score
-        
-        # Create study with pruning
-        pruner = optuna.pruners.MedianPruner(
-            n_startup_trials=5,
-            n_warmup_steps=5,
-            interval_steps=1
-        )
-        
-        if model_type == 'moneyline':
-            study = optuna.create_study(
-                direction='maximize',
-                pruner=pruner,
-                study_name='moneyline_optimization'
-            )
-            objective = objective_moneyline
-        else:
-            study = optuna.create_study(
-                direction='maximize',
-                pruner=pruner,
-                study_name=f'{model_type}_optimization'
-            )
-            objective = objective_regression
-        
-        # Optimize with callbacks for logging
-        def logging_callback(study, trial):
-            if trial.number % 10 == 0:
-                logging.info(f'Trial {trial.number}: Current best score = {study.best_value:.4f}')
-        
-        n_trials = 50 if model_type == 'moneyline' else 30
-        study.optimize(
-            objective,
-            n_trials=n_trials,
-            callbacks=[logging_callback],
-            show_progress_bar=True
-        )
-        
-        # Log optimization results
-        logging.info(f"\nBest trial for {model_type}:")
-        logging.info(f"  Value: {study.best_value:.4f}")
-        logging.info("  Params:")
-        for key, value in study.best_params.items():
-            logging.info(f"    {key}: {value}")
-        
-        return study.best_params
-    
-    def prepare_features(self, games_df):
-        """Prepare features for ML models with enhanced engineering"""
-        df = games_df.copy()
-        
-        # Load team stats
+    def optimize_hyperparameters(self, X_train, y_train, model_type='moneyline'):
+        """Optimize hyperparameters using Optuna"""
         try:
-            team_stats = pd.read_csv('nba_team_stats_all.csv')
-            
-            # Check available columns
-            available_cols = ['Team', 'Season', 'ORtg', 'DRtg', 'Pace']
-            if 'eFG_Pct' in team_stats.columns:
-                available_cols.append('eFG_Pct')
-            if 'eFG_Pct_Allowed' in team_stats.columns:
-                available_cols.append('eFG_Pct_Allowed')
-            if '3P_Pct' in team_stats.columns:
-                available_cols.append('3P_Pct')
-            if '3pt_variance' in team_stats.columns:
-                available_cols.append('3pt_variance')
-            
-            # Merge home team stats
-            df = df.merge(
-                team_stats[available_cols],
-                left_on=['Home_Team', 'Season'],
-                right_on=['Team', 'Season'],
-                how='left',
-                suffixes=('', '_home')
+            # Split training data for validation
+            X_train_opt, X_val, y_train_opt, y_val = train_test_split(
+                X_train, y_train, test_size=0.2, random_state=42
             )
             
-            # Rename columns
-            if 'eFG_Pct' in available_cols:
-                df = df.rename(columns={'eFG_Pct': 'Home_eFG_Pct'})
-            if 'eFG_Pct_Allowed' in available_cols:
-                df = df.rename(columns={'eFG_Pct_Allowed': 'Home_eFG_Pct_Allowed'})
-            if '3P_Pct' in available_cols:
-                df = df.rename(columns={'3P_Pct': 'Home_3P_Pct'})
-            if '3pt_variance' in available_cols:
-                df = df.rename(columns={'3pt_variance': 'Home_3pt_variance'})
-            if 'ORtg' in available_cols:
-                df = df.rename(columns={'ORtg': 'Home_ORtg'})
-            if 'DRtg' in available_cols:
-                df = df.rename(columns={'DRtg': 'Home_DRtg'})
-            if 'Pace' in available_cols:
-                df = df.rename(columns={'Pace': 'Home_Pace'})
+            def objective_moneyline(trial):
+                # Random Forest parameters
+                rf_params = {
+                    'rf_n_estimators': trial.suggest_int('rf_n_estimators', 100, 500),
+                    'rf_max_depth': trial.suggest_int('rf_max_depth', 3, 10),
+                    'rf_min_samples_split': trial.suggest_int('rf_min_samples_split', 2, 10),
+                    'rf_min_samples_leaf': trial.suggest_int('rf_min_samples_leaf', 1, 4),
+                    'rf_class_weight': trial.suggest_categorical('rf_class_weight', [None, 'balanced'])
+                }
+                
+                # XGBoost parameters
+                xgb_params = {
+                    'xgb_n_estimators': trial.suggest_int('xgb_n_estimators', 100, 500),
+                    'xgb_max_depth': trial.suggest_int('xgb_max_depth', 3, 10),
+                    'xgb_learning_rate': trial.suggest_float('xgb_learning_rate', 0.01, 0.1, log=True),
+                    'xgb_subsample': trial.suggest_float('xgb_subsample', 0.6, 1.0),
+                    'xgb_colsample_bytree': trial.suggest_float('xgb_colsample_bytree', 0.6, 1.0),
+                    'xgb_min_child_weight': trial.suggest_int('xgb_min_child_weight', 1, 7),
+                    'xgb_gamma': trial.suggest_float('xgb_gamma', 0, 1)
+                }
+                
+                # LightGBM parameters
+                lgb_params = {
+                    'lgb_n_estimators': trial.suggest_int('lgb_n_estimators', 100, 500),
+                    'lgb_max_depth': trial.suggest_int('lgb_max_depth', 3, 10),
+                    'lgb_learning_rate': trial.suggest_float('lgb_learning_rate', 0.01, 0.1, log=True),
+                    'lgb_subsample': trial.suggest_float('lgb_subsample', 0.6, 1.0),
+                    'lgb_colsample_bytree': trial.suggest_float('lgb_colsample_bytree', 0.6, 1.0),
+                    'lgb_num_leaves': trial.suggest_int('lgb_num_leaves', 20, 50),
+                    'lgb_min_child_samples': trial.suggest_int('lgb_min_child_samples', 5, 50)
+                }
+                
+                # Initialize models with trial parameters
+                rf_model = RandomForestClassifier(
+                    n_estimators=rf_params['rf_n_estimators'],
+                    max_depth=rf_params['rf_max_depth'],
+                    min_samples_split=rf_params['rf_min_samples_split'],
+                    min_samples_leaf=rf_params['rf_min_samples_leaf'],
+                    class_weight=rf_params['rf_class_weight'],
+                    random_state=42,
+                    n_jobs=-1
+                )
+                
+                xgb_model = XGBClassifier(
+                    n_estimators=xgb_params['xgb_n_estimators'],
+                    max_depth=xgb_params['xgb_max_depth'],
+                    learning_rate=xgb_params['xgb_learning_rate'],
+                    subsample=xgb_params['xgb_subsample'],
+                    colsample_bytree=xgb_params['xgb_colsample_bytree'],
+                    min_child_weight=xgb_params['xgb_min_child_weight'],
+                    gamma=xgb_params['xgb_gamma'],
+                    random_state=42,
+                    enable_categorical=False,
+                    use_label_encoder=False,
+                    eval_metric='logloss'
+                )
+                
+                lgb_model = LGBMClassifier(
+                    n_estimators=lgb_params['lgb_n_estimators'],
+                    max_depth=lgb_params['lgb_max_depth'],
+                    learning_rate=lgb_params['lgb_learning_rate'],
+                    subsample=lgb_params['lgb_subsample'],
+                    colsample_bytree=lgb_params['lgb_colsample_bytree'],
+                    num_leaves=lgb_params['lgb_num_leaves'],
+                    min_child_samples=lgb_params['lgb_min_child_samples'],
+                    random_state=42,
+                    n_jobs=-1
+                )
+                
+                # Train and evaluate models
+                rf_model.fit(X_train_opt, y_train_opt)
+                xgb_model.fit(X_train_opt, y_train_opt)
+                lgb_model.fit(X_train_opt, y_train_opt)
+                
+                # Get predictions
+                rf_pred = rf_model.predict_proba(X_val)[:, 1]
+                xgb_pred = xgb_model.predict_proba(X_val)[:, 1]
+                lgb_pred = lgb_model.predict_proba(X_val)[:, 1]
+                
+                # Simple average ensemble
+                ensemble_pred = (rf_pred + xgb_pred + lgb_pred) / 3
+                
+                # Calculate metrics
+                accuracy = accuracy_score(y_val, (ensemble_pred >= 0.5).astype(int))
+                brier = brier_score_loss(y_val, ensemble_pred)
+                ll = log_loss(y_val, np.column_stack((1-ensemble_pred, ensemble_pred)))
+                
+                # Combine metrics (higher is better)
+                score = accuracy - 0.5*brier - 0.5*ll
+                
+                return score
             
-            # Merge away team stats
-            df = df.merge(
-                team_stats[available_cols],
-                left_on=['Away_Team', 'Season'],
-                right_on=['Team', 'Season'],
-                how='left',
-                suffixes=('', '_away')
-            )
+            # Create and run study
+            study = optuna.create_study(direction='maximize')
+            study.optimize(objective_moneyline, n_trials=50)
             
-            # Rename columns
-            if 'eFG_Pct' in available_cols:
-                df = df.rename(columns={'eFG_Pct': 'Away_eFG_Pct'})
-            if 'eFG_Pct_Allowed' in available_cols:
-                df = df.rename(columns={'eFG_Pct_Allowed': 'Away_eFG_Pct_Allowed'})
-            if '3P_Pct' in available_cols:
-                df = df.rename(columns={'3P_Pct': 'Away_3P_Pct'})
-            if '3pt_variance' in available_cols:
-                df = df.rename(columns={'3pt_variance': 'Away_3pt_variance'})
-            if 'ORtg' in available_cols:
-                df = df.rename(columns={'ORtg': 'Away_ORtg'})
-            if 'DRtg' in available_cols:
-                df = df.rename(columns={'DRtg': 'Away_DRtg'})
-            if 'Pace' in available_cols:
-                df = df.rename(columns={'Pace': 'Away_Pace'})
+            # Get best parameters
+            best_params = study.best_params
             
-            # Drop redundant columns
-            df = df.drop(['Team_home', 'Team_away'], axis=1, errors='ignore')
+            # Add model type prefix to parameters
+            params = {}
+            for key, value in best_params.items():
+                params[key] = value
             
-            # Set default values for missing columns
-            if 'Home_eFG_Pct' not in df.columns:
-                df['Home_eFG_Pct'] = 0.5  # League average approximation
-            if 'Away_eFG_Pct' not in df.columns:
-                df['Away_eFG_Pct'] = 0.5
-            if 'Home_eFG_Pct_Allowed' not in df.columns:
-                df['Home_eFG_Pct_Allowed'] = 0.5
-            if 'Away_eFG_Pct_Allowed' not in df.columns:
-                df['Away_eFG_Pct_Allowed'] = 0.5
-            if 'Home_3P_Pct' not in df.columns:
-                df['Home_3P_Pct'] = 0.35  # League average approximation
-            if 'Away_3P_Pct' not in df.columns:
-                df['Away_3P_Pct'] = 0.35
-            if 'Home_3pt_variance' not in df.columns:
-                df['Home_3pt_variance'] = 0.05  # Reasonable default
-            if 'Away_3pt_variance' not in df.columns:
-                df['Away_3pt_variance'] = 0.05
-            if 'Home_ORtg' not in df.columns:
-                df['Home_ORtg'] = 110.0  # League average approximation
-            if 'Away_ORtg' not in df.columns:
-                df['Away_ORtg'] = 110.0
-            if 'Home_DRtg' not in df.columns:
-                df['Home_DRtg'] = 110.0
-            if 'Away_DRtg' not in df.columns:
-                df['Away_DRtg'] = 110.0
-            if 'Home_Pace' not in df.columns:
-                df['Home_Pace'] = 100.0  # League average approximation
-            if 'Away_Pace' not in df.columns:
-                df['Away_Pace'] = 100.0
+            return params
             
-            # Fill NaN values with league averages
-            for col in df.columns:
-                if col.endswith('_Pct') or col.endswith('_variance'):
-                    df[col] = df[col].fillna(df[col].mean())
-                elif col.endswith('Rtg') or col.endswith('Pace'):
-                    df[col] = df[col].fillna(df[col].mean())
         except Exception as e:
-            logging.warning(f"Error loading team stats: {str(e)}. Using default values.")
-            df['Home_eFG_Pct'] = 0.5
-            df['Away_eFG_Pct'] = 0.5
-            df['Home_eFG_Pct_Allowed'] = 0.5
-            df['Away_eFG_Pct_Allowed'] = 0.5
-            df['Home_3P_Pct'] = 0.35
-            df['Away_3P_Pct'] = 0.35
-            df['Home_3pt_variance'] = 0.05
-            df['Away_3pt_variance'] = 0.05
-            df['Home_ORtg'] = 110.0
-            df['Away_ORtg'] = 110.0
-            df['Home_DRtg'] = 110.0
-            df['Away_DRtg'] = 110.0
-            df['Home_Pace'] = 100.0
-            df['Away_Pace'] = 100.0
-        
-        # Calculate win/loss columns
-        df['Home_Win'] = (df['Home_Points'] > df['Away_Points']).astype(int)
-        df['Away_Win'] = (df['Away_Points'] > df['Home_Points']).astype(int)
-        
-        # Calculate win rates with exponential weighting
-        for team_type in ['Home', 'Away']:
-            if team_type == 'Home':
-                team_stats = df.groupby(f'{team_type}_Team')['Home_Win'].agg(['count', 'mean'])
-                df[f'{team_type}_Win_Rate'] = df[f'{team_type}_Team'].map(team_stats['mean'])
-            else:
-                team_stats = df.groupby(f'{team_type}_Team')['Home_Win'].agg(['count', 'mean'])
-                df[f'{team_type}_Win_Rate'] = df[f'{team_type}_Team'].map(1 - team_stats['mean'])
-        
-        # Fill NaN values in win rates with 0.5 (neutral)
-        df['Home_Win_Rate'] = df['Home_Win_Rate'].fillna(0.5)
-        df['Away_Win_Rate'] = df['Away_Win_Rate'].fillna(0.5)
-        
-        # Enhanced feature engineering
-        df['Win_Rate_Diff'] = df['Home_Win_Rate'] - df['Away_Win_Rate']
-        
-        # Calculate eFG% mismatch (offensive and defensive)
-        df['efg_mismatch_offense'] = df['Home_eFG_Pct'] - df['Away_eFG_Pct']
-        df['efg_mismatch_defense'] = df['Away_eFG_Pct_Allowed'] - df['Home_eFG_Pct_Allowed']
-        df['efg_mismatch'] = df['efg_mismatch_offense'] + df['efg_mismatch_defense']
-        
-        # New 3-point volatility feature
-        df['3pt_volatility'] = df['Home_3pt_variance'] - df['Away_3pt_variance']
-        
-        # New pace-adjusted metrics
-        df['pace_adjusted_offense'] = df['Home_ORtg'] * df['Home_Pace'] / 100
-        df['pace_adjusted_defense'] = df['Away_DRtg'] * df['Away_Pace'] / 100
-        
-        # Handle potential division by zero or NaN
-        df['Away_Point_Diff_Roll5'] = df['Away_Point_Diff_Roll5'].fillna(0)
-        df['Home_Point_Diff_Roll5'] = df['Home_Point_Diff_Roll5'].fillna(0)
-        df['Point_Diff_Ratio'] = df.apply(
-            lambda x: x['Home_Point_Diff_Roll5'] / (x['Away_Point_Diff_Roll5'] + 1e-6)
-            if x['Away_Point_Diff_Roll5'] != 0
-            else x['Home_Point_Diff_Roll5'],
-            axis=1
-        )
-        
-        # Fill NaN values in rest days with median
-        df['Home_Rest_Days'] = df['Home_Rest_Days'].fillna(df['Home_Rest_Days'].median())
-        df['Away_Rest_Days'] = df['Away_Rest_Days'].fillna(df['Away_Rest_Days'].median())
-        df['Rest_Advantage'] = df['Home_Rest_Days'] - df['Away_Rest_Days']
-        
-        # Fill NaN values in streaks with 0
-        df['Home_Streak'] = df['Home_Streak'].fillna(0)
-        df['Away_Streak'] = df['Away_Streak'].fillna(0)
-        df['Streak_Advantage'] = df['Home_Streak'] - df['Away_Streak']
-        
-        # Calculate form ratio with NaN handling
-        df['Recent_Form_Ratio'] = df.apply(
-            lambda x: (x['Home_Point_Diff_Roll5'] + 1e-6) / (x['Away_Point_Diff_Roll5'] + 1e-6)
-            if x['Away_Point_Diff_Roll5'] != 0
-            else x['Home_Point_Diff_Roll5'],
-            axis=1
-        )
-        
-        # Interaction features
-        df['Win_Rate_Rest_Interaction'] = df['Win_Rate_Diff'] * df['Rest_Advantage']
-        df['Streak_Form_Interaction'] = df['Streak_Advantage'] * df['Recent_Form_Ratio']
-        df['eFG_Rest_Interaction'] = df['efg_mismatch'] * df['Rest_Advantage']
-        
-        # Fill remaining NaN values with 0
-        feature_cols = self.feature_columns + [
-            'Rest_Advantage', 'Streak_Advantage', 'Recent_Form_Ratio',
-            'Win_Rate_Rest_Interaction', 'Streak_Form_Interaction',
-            'efg_mismatch', 'efg_mismatch_offense', 'efg_mismatch_defense',
-            'eFG_Rest_Interaction'
-        ]
-        X = df[feature_cols].fillna(0)
-        
-        return X
+            logging.error(f"Error in optimize_hyperparameters: {str(e)}")
+            raise
+    
+    def prepare_features(self, df):
+        """Prepare features for model training"""
+        try:
+            # Create a copy to avoid modifying original data
+            X = df.copy()
+            
+            # Drop unnecessary columns
+            drop_cols = ['Team_home', 'Team_away']
+            X = X.drop(columns=[col for col in drop_cols if col in X.columns])
+            
+            # Calculate rolling stats for both teams
+            for team_type in ['Home', 'Away']:
+                # Point differential rolling stats with min_periods
+                X[f'{team_type}_Point_Diff_Roll5'] = (X[f'{team_type}_Points'].rolling(5, min_periods=1).mean() - 
+                                                    X[f'{team_type}_Points_Allowed'].rolling(5, min_periods=1).mean())
+                X[f'{team_type}_Point_Diff_Roll10'] = (X[f'{team_type}_Points'].rolling(10, min_periods=1).mean() - 
+                                                     X[f'{team_type}_Points_Allowed'].rolling(10, min_periods=1).mean())
+                
+                # Shooting efficiency with min_periods
+                X[f'{team_type}_eFG_Roll5'] = X[f'{team_type}_eFG_Pct'].rolling(5, min_periods=1).mean()
+                X[f'{team_type}_eFG_Roll10'] = X[f'{team_type}_eFG_Pct'].rolling(10, min_periods=1).mean()
+                
+                # Advanced metrics
+                X[f'{team_type}_Net_Rating'] = X[f'{team_type}_ORtg'] - X[f'{team_type}_DRtg']
+                X[f'{team_type}_Pace_Adj_Net'] = X[f'{team_type}_Net_Rating'] * (X[f'{team_type}_Pace'] / 100)
+                
+                # Recent form (last 3 games with exponential weighting)
+                recent_games = X[f'{team_type}_Point_Diff_Roll5'].rolling(3, min_periods=1)
+                weights = np.array([0.5, 0.3, 0.2])
+                X[f'Recent_Form_{team_type}'] = recent_games.apply(
+                    lambda x: np.sum(x[-3:] * weights[:len(x[-3:])])
+                )
+                
+                # Opponent strength (weighted average of opponent net ratings)
+                opp_type = 'Away' if team_type == 'Home' else 'Home'
+                X[f'Opponent_Strength_{team_type}'] = (
+                    X[f'{opp_type}_Net_Rating'].rolling(5, min_periods=1).mean()
+                )
+            
+            # Create interaction features
+            X['Streak_Form_Interaction'] = X['Home_Streak'] * X.get('Home_Form', 1) - X['Away_Streak'] * X.get('Away_Form', 1)
+            X['eFG_Rest_Interaction'] = X['Home_eFG_Roll5'] * (X['Home_Rest_Days'] + 1) - X['Away_eFG_Roll5'] * (X['Away_Rest_Days'] + 1)
+            X['Pace_Mismatch'] = abs(X['Home_Pace'] - X['Away_Pace'])
+            X['Rating_Momentum'] = ((X['Home_Point_Diff_Roll5'] - X['Home_Point_Diff_Roll10']) - 
+                                  (X['Away_Point_Diff_Roll5'] - X['Away_Point_Diff_Roll10']))
+            
+            # New differential features
+            X['Rest_Day_Differential'] = X['Home_Rest_Days'] - X['Away_Rest_Days']
+            X['Streak_Momentum'] = np.tanh(X['Home_Streak'] / 5.0) - np.tanh(X['Away_Streak'] / 5.0)
+            X['Home_Road_Differential'] = (
+                X['Home_Point_Diff_Roll5'] + X['Away_Point_Diff_Roll5'].abs()
+            ) / 2
+            
+            # Fill NaN values with medians for each column
+            numeric_cols = X.select_dtypes(include=['float64', 'int64']).columns
+            for col in numeric_cols:
+                median_val = X[col].median()
+                if pd.isna(median_val):  # If median is NaN, use 0 as fallback
+                    X[col] = X[col].fillna(0)
+                else:
+                    X[col] = X[col].fillna(median_val)
+            
+            # Clip values to prevent outliers
+            X['3pt_volatility'] = np.clip(X['3pt_volatility'], -1, 1)
+            X['pace_adjusted_offense'] = np.clip(X['pace_adjusted_offense'], 50, 150)
+            X['pace_adjusted_defense'] = np.clip(X['pace_adjusted_defense'], 50, 150)
+            
+            # Validate feature ranges
+            assert X['3pt_volatility'].between(-1, 1).all(), "3pt_volatility out of range"
+            assert X['pace_adjusted_offense'].between(50, 150).all(), "pace_adjusted_offense out of range"
+            assert X['pace_adjusted_defense'].between(50, 150).all(), "pace_adjusted_defense out of range"
+            
+            # Ensure all required features are present
+            missing_features = set(self.feature_columns) - set(X.columns)
+            if missing_features:
+                raise ValueError(f"Missing required features: {missing_features}")
+            
+            # Return only the required features
+            return X[self.feature_columns]
+            
+        except Exception as e:
+            logging.error(f"Error in prepare_features: {str(e)}")
+            raise
     
     def prepare_labels(self, games_df):
         """Prepare labels for different prediction types"""
@@ -469,163 +273,148 @@ class NBAPredictor:
         
         return y_moneyline, y_spread, y_totals
     
-    def train_models(self, games_df, test_size=0.2):
-        """Train ML models with enhanced ensemble and Bayesian optimization"""
-        logging.info("Preparing features and labels...")
-        
-        played_games = games_df.dropna(subset=['Home_Points', 'Away_Points'])
-        X = self.prepare_features(played_games)
-        y_moneyline, y_spread, y_totals = self.prepare_labels(played_games)
-        
-        # Split data with stratification for moneyline
-        X_train, X_test, y_ml_train, y_ml_test = train_test_split(
-            X, y_moneyline, test_size=test_size, stratify=y_moneyline, random_state=42
-        )
-        _, _, y_spread_train, y_spread_test = train_test_split(
-            X, y_spread, test_size=test_size, random_state=42
-        )
-        _, _, y_totals_train, y_totals_test = train_test_split(
-            X, y_totals, test_size=test_size, random_state=42
-        )
-        
-        # Scale features with updated NaN handling
-        self.scaler = StandardScaler(copy=True, with_mean=True, with_std=True)
-        # Fill NaN values before scaling
-        X_train = pd.DataFrame(X_train).fillna(0)
-        X_test = pd.DataFrame(X_test).fillna(0)
-        X_train_scaled = self.scaler.fit_transform(X_train)
-        X_test_scaled = self.scaler.transform(X_test)
-        
-        # Optimize hyperparameters for each model type
-        logging.info("Optimizing hyperparameters for moneyline model...")
-        ml_params = self.optimize_hyperparameters(
-            X_train_scaled, y_ml_train,
-            X_test_scaled, y_ml_test,
-            model_type='moneyline'
-        )
-        
-        # Initialize models with optimized parameters
-        self.rf_classifier = RandomForestClassifier(
-            n_estimators=ml_params['rf_n_estimators'],
-            max_depth=ml_params['rf_max_depth'],
-            min_samples_split=ml_params['rf_min_samples_split'],
-            min_samples_leaf=ml_params['rf_min_samples_leaf'],
-            random_state=42
-        )
-        
-        self.xgb_classifier = xgb.XGBClassifier(
-            n_estimators=ml_params['xgb_n_estimators'],
-            max_depth=ml_params['xgb_max_depth'],
-            learning_rate=ml_params['xgb_learning_rate'],
-            subsample=ml_params['xgb_subsample'],
-            colsample_bytree=ml_params['xgb_colsample_bytree'],
-            random_state=42,
-            use_label_encoder=False,
-            eval_metric='logloss'
-        )
-        
-        self.lgb_classifier = lgb.LGBMClassifier(
-            n_estimators=ml_params['lgb_n_estimators'],
-            max_depth=ml_params['lgb_max_depth'],
-            learning_rate=ml_params['lgb_learning_rate'],
-            subsample=ml_params['lgb_subsample'],
-            colsample_bytree=ml_params['lgb_colsample_bytree'],
-            random_state=42
-        )
-        
-        # Train moneyline models with calibration
-        logging.info("Training calibrated moneyline models...")
+    def train_models(self, df, test_size=0.2):
+        """Train models using the provided data"""
         try:
-            # Train base models first
-            self.rf_classifier.fit(X_train_scaled, y_ml_train)
-            self.xgb_classifier.fit(X_train_scaled, y_ml_train)
-            self.lgb_classifier.fit(X_train_scaled, y_ml_train)
+            # Prepare features and labels
+            X = self.prepare_features(df)
+            y = (df['Home_Points'] > df['Away_Points']).astype(int)
 
-            # Then calibrate them
-            self.rf_classifier = CalibratedClassifierCV(
-                self.rf_classifier, cv='prefit', method='sigmoid'
-            ).fit(X_train_scaled, y_ml_train)
+            # Split data
+            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42, stratify=y)
+        
+            # Scale features
+            self.scaler = StandardScaler()
+            X_train_scaled = pd.DataFrame(self.scaler.fit_transform(X_train), columns=X_train.columns)
+            X_test_scaled = pd.DataFrame(self.scaler.transform(X_test), columns=X_test.columns)
 
-            self.xgb_classifier = CalibratedClassifierCV(
-                self.xgb_classifier, cv='prefit', method='sigmoid'
-            ).fit(X_train_scaled, y_ml_train)
+            # Initialize models with optimized hyperparameters
+            self.rf_model = RandomForestClassifier(
+                n_estimators=500,
+                max_depth=8,
+                min_samples_split=4,
+                min_samples_leaf=2,
+                class_weight='balanced',
+                random_state=42,
+                n_jobs=-1
+            )
 
-            self.lgb_classifier = CalibratedClassifierCV(
-                self.lgb_classifier, cv='prefit', method='sigmoid'
-            ).fit(X_train_scaled, y_ml_train)
+            self.xgb_model = XGBClassifier(
+                n_estimators=400,
+                max_depth=6,
+                learning_rate=0.03,
+                subsample=0.8,
+                colsample_bytree=0.8,
+                min_child_weight=3,
+                gamma=0.1,
+                random_state=42,
+                use_label_encoder=False,
+                eval_metric='logloss'
+            )
 
-        except (UndefinedMetricWarning, ConvergenceWarning) as e:
-            logging.warning(f"Warning during model calibration: {str(e)}")
-            logging.info("Proceeding with uncalibrated models...")
-        
-        # Get predictions from all models
-        rf_proba = self.rf_classifier.predict_proba(X_test_scaled)
-        xgb_proba = self.xgb_classifier.predict_proba(X_test_scaled)
-        lgb_proba = self.lgb_classifier.predict_proba(X_test_scaled)
-        
-        # Use optimized weights for ensemble
-        ensemble_proba = (
-            ml_params['w1']*rf_proba +
-            ml_params['w2']*xgb_proba +
-            ml_params['w3']*lgb_proba
-        ) / (ml_params['w1'] + ml_params['w2'] + ml_params['w3'])
-        
-        y_ml_pred = (ensemble_proba[:, 1] > 0.5).astype(int)
-        
-        # Evaluate moneyline model
-        ml_accuracy = accuracy_score(y_ml_test, y_ml_pred)
-        brier = brier_score_loss(y_ml_test, ensemble_proba[:, 1])
-        ml_log_loss = log_loss(y_ml_test, ensemble_proba)
-        
-        logging.info(f"Enhanced ensemble moneyline model metrics:")
-        logging.info(f"Accuracy: {ml_accuracy:.3f}")
-        logging.info(f"Brier Score: {brier:.3f}")
-        logging.info(f"Log Loss: {ml_log_loss:.3f}")
-        logging.info("\nClassification Report:")
-        logging.info(classification_report(y_ml_test, y_ml_pred))
-        
-        # Optimize and train spread model
-        logging.info("Optimizing hyperparameters for spread model...")
-        spread_params = self.optimize_hyperparameters(
-            X_train_scaled, y_spread_train,
-            X_test_scaled, y_spread_test,
-            model_type='spread'
-        )
-        
-        self.spread_model = xgb.XGBRegressor(**spread_params, random_state=42)
-        self.spread_model.fit(X_train_scaled, y_spread_train)
-        
-        # Evaluate spread model
-        y_spread_pred = self.spread_model.predict(X_test_scaled)
-        spread_rmse = np.sqrt(mean_squared_error(y_spread_test, y_spread_pred))
-        logging.info(f"Enhanced spread model RMSE: {spread_rmse:.3f}")
-        
-        # Optimize and train totals model
-        logging.info("Optimizing hyperparameters for totals model...")
-        totals_params = self.optimize_hyperparameters(
-            X_train_scaled, y_totals_train,
-            X_test_scaled, y_totals_test,
-            model_type='totals'
-        )
-        
-        self.totals_model = lgb.LGBMRegressor(**totals_params, random_state=42)
-        self.totals_model.fit(X_train_scaled, y_totals_train)
-        
-        # Evaluate totals model
-        y_totals_pred = self.totals_model.predict(X_test_scaled)
-        totals_rmse = np.sqrt(mean_squared_error(y_totals_test, y_totals_pred))
-        logging.info(f"Enhanced totals model RMSE: {totals_rmse:.3f}")
-        
-        # Save models
-        self.save_models()
-        
-        return {
-            'moneyline_accuracy': ml_accuracy,
-            'moneyline_brier': brier,
-            'moneyline_log_loss': ml_log_loss,
-            'spread_rmse': spread_rmse,
-            'totals_rmse': totals_rmse
-        }
+            self.lgb_model = LGBMClassifier(
+                n_estimators=400,
+                max_depth=6,
+                learning_rate=0.03,
+                subsample=0.8,
+                colsample_bytree=0.8,
+                num_leaves=40,
+                min_child_samples=20,
+                random_state=42,
+                n_jobs=-1,
+                silent=True
+            )
+
+            # Train models with cross-validation
+            cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+            
+            # Initialize arrays to store CV predictions
+            rf_cv_preds = np.zeros(len(X_train))
+            xgb_cv_preds = np.zeros(len(X_train))
+            lgb_cv_preds = np.zeros(len(X_train))
+            
+            # Perform cross-validation
+            for train_idx, val_idx in cv.split(X_train_scaled, y_train):
+                X_cv_train, X_cv_val = X_train_scaled.iloc[train_idx], X_train_scaled.iloc[val_idx]
+                y_cv_train, y_cv_val = y_train.iloc[train_idx], y_train.iloc[val_idx]
+                
+                # Train models on fold
+                self.rf_model.fit(X_cv_train, y_cv_train)
+                self.xgb_model.fit(X_cv_train, y_cv_train, eval_set=[(X_cv_val, y_cv_val)], verbose=False)
+                self.lgb_model.fit(X_cv_train, y_cv_train, eval_set=(X_cv_val, y_cv_val), verbose=False)
+                
+                # Store predictions for validation fold
+                rf_cv_preds[val_idx] = self.rf_model.predict_proba(X_cv_val)[:, 1]
+                xgb_cv_preds[val_idx] = self.xgb_model.predict_proba(X_cv_val)[:, 1]
+                lgb_cv_preds[val_idx] = self.lgb_model.predict_proba(X_cv_val)[:, 1]
+            
+            # Optimize ensemble weights using cross-validation performance
+            def objective(weights):
+                # Normalize weights to sum to 1
+                weights = np.array(weights)
+                weights = weights / np.sum(weights)
+                
+                # Combine predictions with weights
+                ensemble_preds = (
+                    weights[0] * rf_cv_preds +
+                    weights[1] * xgb_cv_preds +
+                    weights[2] * lgb_cv_preds
+                )
+                
+                # Calculate metrics
+                accuracy = accuracy_score(y_train, (ensemble_preds >= 0.5).astype(int))
+                brier = brier_score_loss(y_train, ensemble_preds)
+                ll = log_loss(y_train, np.column_stack((1-ensemble_preds, ensemble_preds)))
+                
+                # Combined score (higher is better)
+                return -(0.4 * accuracy - 0.3 * brier - 0.3 * ll)
+            
+            # Find optimal weights
+            from scipy.optimize import minimize
+            initial_weights = [0.4, 0.3, 0.3]
+            bounds = [(0, 1)] * 3
+            constraints = {'type': 'eq', 'fun': lambda w: np.sum(w) - 1}
+            result = minimize(objective, initial_weights, bounds=bounds, constraints=constraints)
+            optimal_weights = result.x
+            
+            # Train final models on full training set
+            self.rf_model.fit(X_train_scaled, y_train)
+            self.xgb_model.fit(X_train_scaled, y_train, eval_set=[(X_test_scaled, y_test)], verbose=False)
+            self.lgb_model.fit(X_train_scaled, y_train, eval_set=(X_test_scaled, y_test), verbose=False)
+            
+            # Get predictions with optimal weights
+            rf_pred = self.rf_model.predict_proba(X_test_scaled)[:, 1]
+            xgb_pred = self.xgb_model.predict_proba(X_test_scaled)[:, 1]
+            lgb_pred = self.lgb_model.predict_proba(X_test_scaled)[:, 1]
+            
+            ensemble_probs = (
+                optimal_weights[0] * rf_pred +
+                optimal_weights[1] * xgb_pred +
+                optimal_weights[2] * lgb_pred
+            )
+            ensemble_preds = (ensemble_probs > 0.5).astype(int)
+            
+            # Store optimal weights
+            self.ensemble_weights = optimal_weights
+            
+            # Calculate metrics
+            metrics = {
+                'moneyline_accuracy': accuracy_score(y_test, ensemble_preds),
+                'moneyline_log_loss': log_loss(y_test, ensemble_probs),
+                'moneyline_brier': brier_score_loss(y_test, ensemble_probs),
+                'ensemble_weights': optimal_weights.tolist(),
+                'spread_rmse': 0.0,  # Placeholder
+                'totals_rmse': 0.0   # Placeholder
+            }
+            
+            logging.info(f"Training metrics: {metrics}")
+            logging.info(f"Optimal ensemble weights: RF={optimal_weights[0]:.3f}, XGB={optimal_weights[1]:.3f}, LGB={optimal_weights[2]:.3f}")
+            
+            return metrics
+
+        except Exception as e:
+            logging.error(f"Model training failed: {str(e)}")
+            raise
     
     def save_models(self):
         """Save trained models and scaler"""
@@ -649,51 +438,55 @@ class NBAPredictor:
             return False
     
     def predict_games(self, games_df):
-        """Generate predictions for games with enhanced ensemble"""
-        X = self.prepare_features(games_df)
-        X_scaled = self.scaler.transform(X)
-        
-        predictions = pd.DataFrame()
-        predictions['Home_Team'] = games_df['Home_Team']
-        predictions['Away_Team'] = games_df['Away_Team']
-        predictions['Date'] = games_df['Date']
-        
-        # Get predictions from all models
-        sklearn_proba = self.moneyline_model.predict_proba(X_scaled)
-        xgb_proba = self.xgb_classifier.predict_proba(X_scaled)
-        lgb_proba = self.lgb_classifier.predict_proba(X_scaled)
-        
-        # Weighted average of probabilities
-        ensemble_proba = (2*sklearn_proba + 2*xgb_proba + 2*lgb_proba) / 6
-        predictions['Home_Win_Prob'] = ensemble_proba[:, 1]
-        predictions['Away_Win_Prob'] = ensemble_proba[:, 0]
-        predictions['Moneyline_Pick'] = (predictions['Home_Win_Prob'] > 0.5).astype(int)
-        
-        # Spread and totals predictions
-        predictions['Predicted_Spread'] = self.spread_model.predict(X_scaled)
-        predictions['Predicted_Total'] = self.totals_model.predict(X_scaled)
-        
-        # First Half predictions (based on historical patterns)
-        predictions['First_Half_Total'] = predictions['Predicted_Total'] * 0.52
-        predictions['First_Half_Spread'] = predictions['Predicted_Spread'] * 0.48
-        
-        # Quarter predictions
-        predictions['Avg_Quarter_Points'] = predictions['Predicted_Total'] / 4
-        predictions['First_Quarter_Total'] = predictions['Predicted_Total'] * 0.24
-        predictions['First_Quarter_Spread'] = predictions['Predicted_Spread'] * 0.45
-        
-        # Enhanced confidence calculation using ensemble agreement
-        predictions['Moneyline_Confidence'] = np.maximum(
-            predictions['Home_Win_Prob'],
-            predictions['Away_Win_Prob']
-        )
-        
-        # Format predictions
-        predictions['Formatted_Predictions'] = predictions.apply(
-            lambda x: self._format_prediction(x), axis=1
-        )
-        
-        return predictions
+        """Generate predictions for the provided games"""
+        try:
+            # Prepare features
+            X = self.prepare_features(games_df)
+            
+            # Scale features if scaler exists
+            if hasattr(self, 'scaler'):
+                X_scaled = pd.DataFrame(self.scaler.transform(X), columns=X.columns)
+            else:
+                X_scaled = X
+            
+            # Get predictions from each model
+            rf_pred = self.rf_model.predict_proba(X_scaled)[:, 1]
+            xgb_pred = self.xgb_model.predict_proba(X_scaled)[:, 1]
+            lgb_pred = self.lgb_model.predict_proba(X_scaled)[:, 1]
+            
+            # Use optimized ensemble weights if available
+            if hasattr(self, 'ensemble_weights'):
+                ensemble_probs = (
+                    self.ensemble_weights[0] * rf_pred +
+                    self.ensemble_weights[1] * xgb_pred +
+                    self.ensemble_weights[2] * lgb_pred
+                )
+            else:
+                # Fallback to default weights
+                ensemble_probs = 0.4 * rf_pred + 0.3 * xgb_pred + 0.3 * lgb_pred
+            
+            ensemble_preds = (ensemble_probs > 0.5).astype(int)
+            
+            # Calculate confidence scores
+            confidence_scores = np.abs(ensemble_probs - 0.5) * 2  # Scale to [0, 1]
+            
+            # Create prediction DataFrame
+            predictions = pd.DataFrame({
+                'Home_Team': games_df['Home_Team'],
+                'Away_Team': games_df['Away_Team'],
+                'Date': games_df['Date'],
+                'Home_Win_Probability': ensemble_probs,
+                'Away_Win_Probability': 1 - ensemble_probs,
+                'Moneyline_Pick': np.where(ensemble_probs > 0.5, games_df['Home_Team'], games_df['Away_Team']),
+                'Prediction': ensemble_preds,
+                'Confidence': confidence_scores
+            })
+            
+            return predictions
+            
+        except Exception as e:
+            logging.error(f"Prediction failed: {str(e)}")
+            raise
     
     def _format_prediction(self, row):
         """Format prediction row into readable string"""
@@ -842,7 +635,7 @@ class NBAPredictor:
             else:
                 base_value *= 0.8
         
-        return min(base_value * 0.90, 1.0)  # Lower confidence for quarters
+        return min(base_value * 0.90, 1.0)  # Lower confidence for quarters 
     
     def _cross_val_score(self, X_train, y_train, model):
         """Calculate cross-validation score for a model."""
@@ -868,3 +661,60 @@ class NBAPredictor:
         
         # Combined metric
         return 0.4 * accuracy - 0.3 * log_loss_val - 0.3 * brier 
+
+    def predict(self, X):
+        """Make predictions using the trained ensemble.
+        
+        Args:
+            X (pd.DataFrame): Features to predict on
+            
+        Returns:
+            np.ndarray: Binary predictions
+        """
+        try:
+            # Scale features if scaler exists
+            if self.scaler is not None:
+                X_scaled = pd.DataFrame(self.scaler.transform(X), columns=X.columns)
+            else:
+                X_scaled = X
+            
+            # Get predictions from each model
+            rf_pred = self.rf_model.predict_proba(X_scaled)[:, 1]
+            xgb_pred = self.xgb_model.predict_proba(X_scaled)[:, 1]
+            lgb_pred = self.lgb_model.predict_proba(X_scaled)[:, 1]
+            
+            # Weighted average
+            ensemble_pred = (0.4 * rf_pred + 0.3 * xgb_pred + 0.3 * lgb_pred)
+            return (ensemble_pred > 0.5).astype(int)
+            
+        except Exception as e:
+            logging.error(f"Error in predict: {str(e)}")
+            raise
+
+    def predict_proba(self, X):
+        """Get probability predictions using the trained ensemble.
+        
+        Args:
+            X (pd.DataFrame): Features to predict on
+            
+        Returns:
+            np.ndarray: Probability predictions
+        """
+        try:
+            # Scale features if scaler exists
+            if self.scaler is not None:
+                X_scaled = pd.DataFrame(self.scaler.transform(X), columns=X.columns)
+            else:
+                X_scaled = X
+            
+            # Get predictions from each model
+            rf_pred = self.rf_model.predict_proba(X_scaled)[:, 1]
+            xgb_pred = self.xgb_model.predict_proba(X_scaled)[:, 1]
+            lgb_pred = self.lgb_model.predict_proba(X_scaled)[:, 1]
+            
+            # Weighted average
+            return 0.4 * rf_pred + 0.3 * xgb_pred + 0.3 * lgb_pred
+            
+        except Exception as e:
+            logging.error(f"Error in predict_proba: {str(e)}")
+            raise 

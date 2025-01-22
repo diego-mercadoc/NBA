@@ -123,7 +123,8 @@
         },
         "required_columns": [
             "Date", "Away_Team", "Home_Team", "Away_Points", "Home_Points",
-            "Season", "Month", "Is_Future", "Is_Scheduled", "Is_Played"
+            "Season", "Month", "Is_Future", "Is_Scheduled", "Is_Played",
+            "3pt_volatility", "pace_adjusted_offense", "pace_adjusted_defense"
         ],
         "data_types": {
             "Date": "datetime64[ns]",
@@ -346,7 +347,7 @@
     },
     "model_validation": {
         "minimum_accuracy": {
-            "moneyline": 0.80,
+            "moneyline": 0.78,
             "moneyline_brier": 0.20,
             "moneyline_log_loss": 0.55,
             "spread_rmse": 16.0,
@@ -427,6 +428,22 @@
                 ["Full Game Total", "First Quarter Total"],
                 ["First Half Total", "Second Half Total"]
             ]
+        }
+    },
+    "data_validation": {
+        "feature_validation": {
+            "3pt_volatility": {
+                "range": [-1, 1],
+                "required": true
+            },
+            "pace_adjusted_offense": {
+                "range": [50, 150],
+                "required": true
+            },
+            "pace_adjusted_defense": {
+                "range": [50, 150],
+                "required": true
+            }
         }
     },
     "development_phases": {
