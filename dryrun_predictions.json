@@ -1,0 +1,1526 @@
+{
+  "timestamp": "2025-01-24T19:43:04.373013",
+  "num_predictions": 100,
+  "runs": [
+    {
+      "run_id": 1,
+      "predictions": [
+        {
+          "game": "Phoenix Suns @ Dallas Mavericks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Chicago Bulls @ New York Knicks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "San Antonio Spurs @ Miami Heat",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Milwaukee Bucks @ Miami Heat",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Denver Nuggets @ Minnesota Timberwolves",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Chicago Bulls @ Golden State Warriors",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Orlando Magic @ Cleveland Cavaliers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Boston Celtics @ San Antonio Spurs",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Washington Wizards @ New Orleans Pelicans",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Phoenix Suns @ San Antonio Spurs",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Boston Celtics @ Utah Jazz",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Brooklyn Nets @ Atlanta Hawks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Los Angeles Lakers @ Dallas Mavericks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Portland Trail Blazers @ Oklahoma City Thunder",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Toronto Raptors @ Brooklyn Nets",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Golden State Warriors @ Los Angeles Lakers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Memphis Grizzlies @ Utah Jazz",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Dallas Mavericks @ Memphis Grizzlies",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "New Orleans Pelicans @ Miami Heat",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Chicago Bulls @ Portland Trail Blazers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Minnesota Timberwolves @ Sacramento Kings",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Houston Rockets @ Milwaukee Bucks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Golden State Warriors @ Cleveland Cavaliers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Los Angeles Clippers @ Oklahoma City Thunder",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Portland Trail Blazers @ Minnesota Timberwolves",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Boston Celtics @ Utah Jazz",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Chicago Bulls @ Orlando Magic",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Chicago Bulls @ Atlanta Hawks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Brooklyn Nets @ Oklahoma City Thunder",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Oklahoma City Thunder @ Chicago Bulls",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Milwaukee Bucks @ Portland Trail Blazers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Indiana Pacers @ Chicago Bulls",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "New Orleans Pelicans @ Chicago Bulls",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Miami Heat @ Philadelphia 76ers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Charlotte Hornets @ Brooklyn Nets",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Golden State Warriors @ Los Angeles Lakers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Indiana Pacers @ Washington Wizards",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Memphis Grizzlies @ Chicago Bulls",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Los Angeles Clippers @ Toronto Raptors",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Detroit Pistons @ Miami Heat",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Minnesota Timberwolves @ Boston Celtics",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Orlando Magic @ Washington Wizards",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Chicago Bulls @ Atlanta Hawks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Minnesota Timberwolves @ New Orleans Pelicans",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Atlanta Hawks @ Milwaukee Bucks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Orlando Magic @ Cleveland Cavaliers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Atlanta Hawks @ Charlotte Hornets",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "San Antonio Spurs @ New Orleans Pelicans",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Miami Heat @ Dallas Mavericks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Houston Rockets @ San Antonio Spurs",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Dallas Mavericks @ Memphis Grizzlies",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Los Angeles Clippers @ Utah Jazz",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Houston Rockets @ Phoenix Suns",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Sacramento Kings @ Memphis Grizzlies",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Milwaukee Bucks @ Golden State Warriors",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Brooklyn Nets @ Minnesota Timberwolves",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Orlando Magic @ Miami Heat",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Miami Heat @ Boston Celtics",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Indiana Pacers @ Atlanta Hawks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Memphis Grizzlies @ Golden State Warriors",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Portland Trail Blazers @ Sacramento Kings",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Sacramento Kings @ San Antonio Spurs",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Los Angeles Lakers @ Sacramento Kings",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Memphis Grizzlies @ Utah Jazz",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Washington Wizards @ Dallas Mavericks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Utah Jazz @ Indiana Pacers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Boston Celtics @ Minnesota Timberwolves",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Cleveland Cavaliers @ San Antonio Spurs",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Charlotte Hornets @ Los Angeles Lakers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Charlotte Hornets @ Miami Heat",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Memphis Grizzlies @ Toronto Raptors",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Chicago Bulls @ Cleveland Cavaliers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Atlanta Hawks @ Sacramento Kings",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Philadelphia 76ers @ Toronto Raptors",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Houston Rockets @ Toronto Raptors",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Minnesota Timberwolves @ Utah Jazz",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Phoenix Suns @ Washington Wizards",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Sacramento Kings @ Phoenix Suns",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Houston Rockets @ San Antonio Spurs",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Brooklyn Nets @ Los Angeles Lakers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Philadelphia 76ers @ Dallas Mavericks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Miami Heat @ Chicago Bulls",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "San Antonio Spurs @ Dallas Mavericks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Phoenix Suns @ Boston Celtics",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "New York Knicks @ Dallas Mavericks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Brooklyn Nets @ San Antonio Spurs",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Phoenix Suns @ Denver Nuggets",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Detroit Pistons @ Sacramento Kings",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Philadelphia 76ers @ Atlanta Hawks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Washington Wizards @ Phoenix Suns",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Toronto Raptors @ Charlotte Hornets",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Minnesota Timberwolves @ Denver Nuggets",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Cleveland Cavaliers @ Detroit Pistons",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Portland Trail Blazers @ Orlando Magic",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Indiana Pacers @ Utah Jazz",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Dallas Mavericks @ San Antonio Spurs",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Philadelphia 76ers @ Detroit Pistons",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Golden State Warriors @ San Antonio Spurs",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Denver Nuggets @ Oklahoma City Thunder",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Miami Heat @ Boston Celtics",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        }
+      ]
+    },
+    {
+      "run_id": 2,
+      "predictions": [
+        {
+          "game": "Phoenix Suns @ Dallas Mavericks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Chicago Bulls @ New York Knicks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "San Antonio Spurs @ Miami Heat",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Milwaukee Bucks @ Miami Heat",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Denver Nuggets @ Minnesota Timberwolves",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Chicago Bulls @ Golden State Warriors",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Orlando Magic @ Cleveland Cavaliers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Boston Celtics @ San Antonio Spurs",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Washington Wizards @ New Orleans Pelicans",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Phoenix Suns @ San Antonio Spurs",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Boston Celtics @ Utah Jazz",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Brooklyn Nets @ Atlanta Hawks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Los Angeles Lakers @ Dallas Mavericks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Portland Trail Blazers @ Oklahoma City Thunder",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Toronto Raptors @ Brooklyn Nets",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Golden State Warriors @ Los Angeles Lakers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Memphis Grizzlies @ Utah Jazz",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Dallas Mavericks @ Memphis Grizzlies",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "New Orleans Pelicans @ Miami Heat",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Chicago Bulls @ Portland Trail Blazers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Minnesota Timberwolves @ Sacramento Kings",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Houston Rockets @ Milwaukee Bucks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Golden State Warriors @ Cleveland Cavaliers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Los Angeles Clippers @ Oklahoma City Thunder",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Portland Trail Blazers @ Minnesota Timberwolves",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Boston Celtics @ Utah Jazz",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Chicago Bulls @ Orlando Magic",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Chicago Bulls @ Atlanta Hawks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Brooklyn Nets @ Oklahoma City Thunder",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Oklahoma City Thunder @ Chicago Bulls",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Milwaukee Bucks @ Portland Trail Blazers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Indiana Pacers @ Chicago Bulls",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "New Orleans Pelicans @ Chicago Bulls",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Miami Heat @ Philadelphia 76ers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Charlotte Hornets @ Brooklyn Nets",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Golden State Warriors @ Los Angeles Lakers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Indiana Pacers @ Washington Wizards",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Memphis Grizzlies @ Chicago Bulls",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Los Angeles Clippers @ Toronto Raptors",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Detroit Pistons @ Miami Heat",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Minnesota Timberwolves @ Boston Celtics",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Orlando Magic @ Washington Wizards",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Chicago Bulls @ Atlanta Hawks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Minnesota Timberwolves @ New Orleans Pelicans",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Atlanta Hawks @ Milwaukee Bucks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Orlando Magic @ Cleveland Cavaliers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Atlanta Hawks @ Charlotte Hornets",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "San Antonio Spurs @ New Orleans Pelicans",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Miami Heat @ Dallas Mavericks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Houston Rockets @ San Antonio Spurs",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Dallas Mavericks @ Memphis Grizzlies",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Los Angeles Clippers @ Utah Jazz",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Houston Rockets @ Phoenix Suns",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Sacramento Kings @ Memphis Grizzlies",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Milwaukee Bucks @ Golden State Warriors",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Brooklyn Nets @ Minnesota Timberwolves",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Orlando Magic @ Miami Heat",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Miami Heat @ Boston Celtics",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Indiana Pacers @ Atlanta Hawks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Memphis Grizzlies @ Golden State Warriors",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Portland Trail Blazers @ Sacramento Kings",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Sacramento Kings @ San Antonio Spurs",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Los Angeles Lakers @ Sacramento Kings",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Memphis Grizzlies @ Utah Jazz",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Washington Wizards @ Dallas Mavericks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Utah Jazz @ Indiana Pacers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Boston Celtics @ Minnesota Timberwolves",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Cleveland Cavaliers @ San Antonio Spurs",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Charlotte Hornets @ Los Angeles Lakers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Charlotte Hornets @ Miami Heat",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Memphis Grizzlies @ Toronto Raptors",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Chicago Bulls @ Cleveland Cavaliers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Atlanta Hawks @ Sacramento Kings",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Philadelphia 76ers @ Toronto Raptors",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Houston Rockets @ Toronto Raptors",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Minnesota Timberwolves @ Utah Jazz",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Phoenix Suns @ Washington Wizards",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Sacramento Kings @ Phoenix Suns",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Houston Rockets @ San Antonio Spurs",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Brooklyn Nets @ Los Angeles Lakers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Philadelphia 76ers @ Dallas Mavericks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Miami Heat @ Chicago Bulls",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "San Antonio Spurs @ Dallas Mavericks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Phoenix Suns @ Boston Celtics",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "New York Knicks @ Dallas Mavericks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Brooklyn Nets @ San Antonio Spurs",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Phoenix Suns @ Denver Nuggets",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Detroit Pistons @ Sacramento Kings",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Philadelphia 76ers @ Atlanta Hawks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Washington Wizards @ Phoenix Suns",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Toronto Raptors @ Charlotte Hornets",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Minnesota Timberwolves @ Denver Nuggets",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Cleveland Cavaliers @ Detroit Pistons",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Portland Trail Blazers @ Orlando Magic",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Indiana Pacers @ Utah Jazz",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Dallas Mavericks @ San Antonio Spurs",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Philadelphia 76ers @ Detroit Pistons",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Golden State Warriors @ San Antonio Spurs",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Denver Nuggets @ Oklahoma City Thunder",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Miami Heat @ Boston Celtics",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        }
+      ]
+    },
+    {
+      "run_id": 3,
+      "predictions": [
+        {
+          "game": "Phoenix Suns @ Dallas Mavericks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Chicago Bulls @ New York Knicks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "San Antonio Spurs @ Miami Heat",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Milwaukee Bucks @ Miami Heat",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Denver Nuggets @ Minnesota Timberwolves",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Chicago Bulls @ Golden State Warriors",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Orlando Magic @ Cleveland Cavaliers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Boston Celtics @ San Antonio Spurs",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Washington Wizards @ New Orleans Pelicans",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Phoenix Suns @ San Antonio Spurs",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Boston Celtics @ Utah Jazz",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Brooklyn Nets @ Atlanta Hawks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Los Angeles Lakers @ Dallas Mavericks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Portland Trail Blazers @ Oklahoma City Thunder",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Toronto Raptors @ Brooklyn Nets",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Golden State Warriors @ Los Angeles Lakers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Memphis Grizzlies @ Utah Jazz",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Dallas Mavericks @ Memphis Grizzlies",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "New Orleans Pelicans @ Miami Heat",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Chicago Bulls @ Portland Trail Blazers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Minnesota Timberwolves @ Sacramento Kings",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Houston Rockets @ Milwaukee Bucks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Golden State Warriors @ Cleveland Cavaliers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Los Angeles Clippers @ Oklahoma City Thunder",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Portland Trail Blazers @ Minnesota Timberwolves",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Boston Celtics @ Utah Jazz",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Chicago Bulls @ Orlando Magic",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Chicago Bulls @ Atlanta Hawks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Brooklyn Nets @ Oklahoma City Thunder",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Oklahoma City Thunder @ Chicago Bulls",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Milwaukee Bucks @ Portland Trail Blazers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Indiana Pacers @ Chicago Bulls",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "New Orleans Pelicans @ Chicago Bulls",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Miami Heat @ Philadelphia 76ers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Charlotte Hornets @ Brooklyn Nets",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Golden State Warriors @ Los Angeles Lakers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Indiana Pacers @ Washington Wizards",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Memphis Grizzlies @ Chicago Bulls",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Los Angeles Clippers @ Toronto Raptors",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Detroit Pistons @ Miami Heat",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Minnesota Timberwolves @ Boston Celtics",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Orlando Magic @ Washington Wizards",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Chicago Bulls @ Atlanta Hawks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Minnesota Timberwolves @ New Orleans Pelicans",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Atlanta Hawks @ Milwaukee Bucks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Orlando Magic @ Cleveland Cavaliers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Atlanta Hawks @ Charlotte Hornets",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "San Antonio Spurs @ New Orleans Pelicans",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Miami Heat @ Dallas Mavericks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Houston Rockets @ San Antonio Spurs",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Dallas Mavericks @ Memphis Grizzlies",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Los Angeles Clippers @ Utah Jazz",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Houston Rockets @ Phoenix Suns",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Sacramento Kings @ Memphis Grizzlies",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Milwaukee Bucks @ Golden State Warriors",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Brooklyn Nets @ Minnesota Timberwolves",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Orlando Magic @ Miami Heat",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Miami Heat @ Boston Celtics",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Indiana Pacers @ Atlanta Hawks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Memphis Grizzlies @ Golden State Warriors",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Portland Trail Blazers @ Sacramento Kings",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Sacramento Kings @ San Antonio Spurs",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Los Angeles Lakers @ Sacramento Kings",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Memphis Grizzlies @ Utah Jazz",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Washington Wizards @ Dallas Mavericks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Utah Jazz @ Indiana Pacers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Boston Celtics @ Minnesota Timberwolves",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Cleveland Cavaliers @ San Antonio Spurs",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Charlotte Hornets @ Los Angeles Lakers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Charlotte Hornets @ Miami Heat",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Memphis Grizzlies @ Toronto Raptors",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Chicago Bulls @ Cleveland Cavaliers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Atlanta Hawks @ Sacramento Kings",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Philadelphia 76ers @ Toronto Raptors",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Houston Rockets @ Toronto Raptors",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Minnesota Timberwolves @ Utah Jazz",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Phoenix Suns @ Washington Wizards",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Sacramento Kings @ Phoenix Suns",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Houston Rockets @ San Antonio Spurs",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Brooklyn Nets @ Los Angeles Lakers",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Philadelphia 76ers @ Dallas Mavericks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Miami Heat @ Chicago Bulls",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "San Antonio Spurs @ Dallas Mavericks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Phoenix Suns @ Boston Celtics",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "New York Knicks @ Dallas Mavericks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Brooklyn Nets @ San Antonio Spurs",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Phoenix Suns @ Denver Nuggets",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Detroit Pistons @ Sacramento Kings",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Philadelphia 76ers @ Atlanta Hawks",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Washington Wizards @ Phoenix Suns",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Toronto Raptors @ Charlotte Hornets",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Minnesota Timberwolves @ Denver Nuggets",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Cleveland Cavaliers @ Detroit Pistons",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Portland Trail Blazers @ Orlando Magic",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Indiana Pacers @ Utah Jazz",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Dallas Mavericks @ San Antonio Spurs",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Philadelphia 76ers @ Detroit Pistons",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Golden State Warriors @ San Antonio Spurs",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Denver Nuggets @ Oklahoma City Thunder",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        },
+        {
+          "game": "Miami Heat @ Boston Celtics",
+          "pick": "Home",
+          "confidence": 0.506407890074791
+        }
+      ]
+    }
+  ],
+  "correlations": {
+    "team_strength_win_rate": NaN,
+    "points_scored_ortg": 1.0,
+    "recent_form_streak": 1.0
+  }
+}

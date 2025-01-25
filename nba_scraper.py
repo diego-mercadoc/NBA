@@ -739,13 +739,12 @@ class NBADataScraper:
                                 points_for = (
                                     (home_games[home_col].mean() * len(home_games) +
                                      away_games[away_col].mean() * len(away_games))
-                                    / (len(home_games) + len(away_games))
+                                    / (len(home_games) + len(away_games)))
                                 
                                 points_against = (
                                     (home_games[away_col].mean() * len(home_games) +
                                      away_games[home_col].mean() * len(away_games))
-                                    / (len(home_games) + len(away_games))
-                                )
+                                    / (len(home_games) + len(away_games)))
                                 
                                 # Update DataFrame
                                 df.loc[df['Team'] == team, f'Q{quarter}_Points_For'] = points_for
