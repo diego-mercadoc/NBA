@@ -95,7 +95,7 @@ def main():
             # Clean today's games data - IMPORTANT: CLEAN CURRENT GAMES TOO
             logging.info("Cleaning today's games data...")
             if today_games is not None:
-                today_games = scraper.clean_games_data(today_games)
+                today_games = scraper.clean_games_data(today_games, preserve_future_games=True)
             if today_games is None: # Added check, although get_current_games should not return None in normal cases
                 logging.warning("Could not clean today's games data, proceeding without cleaning...")
             else:
@@ -124,8 +124,16 @@ def main():
             # Filter predictions for January 27, 2025
             prediction_date = pd.Timestamp('January 27, 2025') # Naive prediction_date
             filtered_predictions = predictions[pd.to_datetime(predictions['Date']).dt.date == prediction_date.date()]
-            filtered_best_bets = best_bets[best_bets['Game'].isin([f"{p['Away_Team']} @ {p['Home_Team']}" for _, p in filtered_predictions.iterrows()])]
 
+            # Add Game column to predictions if it doesn't exist
+            if 'Game' not in predictions.columns:
+                predictions['Game'] = predictions.apply(lambda x: f"{x['Away_Team']} @ {x['Home_Team']}", axis=1)
+
+            # Only filter best bets if we have any
+            if not best_bets.empty:
+                filtered_best_bets = best_bets[best_bets['Game'].isin(predictions['Game'])]
+            else:
+                filtered_best_bets = pd.DataFrame(columns=["Game", "Bet_Type", "Prediction", "Confidence", "Value_Rating"])
 
             logging.info("\nPredictions for today's games:")
             for pred in predictions['Formatted_Predictions']:

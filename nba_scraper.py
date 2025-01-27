@@ -311,12 +311,13 @@ class NBADataScraper:
                 logging.error(f"Error scraping {url}: {str(e)}")
             return None
 
-    def clean_games_data(self, games_df):
+    def clean_games_data(self, games_df, preserve_future_games=False):
         """
         Clean and enhance the games dataset with additional metrics.
 
         Args:
             games_df (pd.DataFrame): Raw games DataFrame
+            preserve_future_games (bool): If True, keep future games in the dataset
 
         Returns:
             pd.DataFrame or None: Cleaned and enhanced DataFrame if successful, None if input is invalid
@@ -324,7 +325,7 @@ class NBADataScraper:
         Enhancements:
         - Converts dates to datetime format
         - Cleans numeric data (points)
-        - Removes future/unplayed games
+        - Removes future/unplayed games (unless preserve_future_games=True)
         - Adds game outcome columns
         - Calculates rest days between games
         - Adds winning/losing streaks
@@ -344,16 +345,29 @@ class NBADataScraper:
         games_df['Home_Points'] = pd.to_numeric(games_df['Home_Points'], errors='coerce')
         logging.info("Converted points to numeric format")
 
-        # Remove future games (no points)
-        initial_rows = len(games_df)
-        games_df = games_df.dropna(subset=['Away_Points', 'Home_Points'])
-        removed_rows = initial_rows - len(games_df)
-        if removed_rows > 0:
-            logging.info(f"Removed {removed_rows} future/invalid games")
+        # Set Is_Future flag based on missing points
+        games_df['Is_Future'] = games_df['Away_Points'].isna() | games_df['Home_Points'].isna()
+        games_df['Is_Scheduled'] = games_df['Date'] <= pd.Timestamp('2025-04-13')
+        games_df['Is_Played'] = ~games_df['Is_Future']
 
-        # Add game outcome columns
-        games_df['Home_Win'] = (games_df['Home_Points'] > games_df['Away_Points']).astype(int)
-        games_df['Point_Diff'] = games_df['Home_Points'] - games_df['Away_Points']
+        # Handle future games based on parameter
+        initial_rows = len(games_df)
+        if not preserve_future_games:
+            games_df = games_df[~games_df['Is_Future']].copy()
+            removed_rows = initial_rows - len(games_df)
+            if removed_rows > 0:
+                logging.info(f"Removed {removed_rows} future/invalid games")
+        else:
+            future_games = games_df[games_df['Is_Future']]
+            if not future_games.empty:
+                logging.info(f"Preserving {len(future_games)} future games")
+
+        # Add game outcome columns (only for played games)
+        played_games = ~games_df['Is_Future']
+        games_df['Home_Win'] = 0  # Initialize columns
+        games_df['Point_Diff'] = 0
+        games_df.loc[played_games, 'Home_Win'] = (games_df.loc[played_games, 'Home_Points'] > games_df.loc[played_games, 'Away_Points']).astype(int)
+        games_df.loc[played_games, 'Point_Diff'] = games_df.loc[played_games, 'Home_Points'] - games_df.loc[played_games, 'Away_Points']
         logging.info("Added game outcome columns")
 
         # Calculate days of rest
@@ -642,9 +656,10 @@ class NBADataScraper:
                 else:
                     col_names = df.columns
 
-                if 'ORtg' in col_names or 'DRtg' in col_names:
+                # Check if this table has the required stats
+                if any(stat in col_names for stat in ['ORtg', 'DRtg', 'Pace']):
                     logging.info(f"Found advanced stats in table {i}")
-                    advanced_stats_table = df
+                    advanced_stats_table = df.copy()  # Create a copy to avoid modifying original
                     break
 
             if advanced_stats_table is not None:
@@ -652,12 +667,17 @@ class NBADataScraper:
 
                 # Handle multi-index columns
                 if isinstance(df.columns, pd.MultiIndex):
-                    # For columns that are part of 'Offense Four Factors' or 'Defense Four Factors'
-                    # use both levels, otherwise just use the second level
-                    df.columns = [
-                        f"{col[0]}_{col[1]}" if 'Four Factors' in str(col[0]) else col[1]
-                        for col in df.columns
-                    ]
+                    # Create a mapping for the columns we want
+                    new_cols = []
+                    for col in df.columns:
+                        if isinstance(col, tuple):
+                            if 'Four Factors' in str(col[0]):
+                                new_cols.append(f"{col[0]}_{col[1]}")
+                            else:
+                                new_cols.append(col[1])
+                        else:
+                            new_cols.append(col)
+                    df.columns = new_cols
 
                 # Debug logging
                 logging.info(f"Processed columns: {df.columns.tolist()}")
@@ -677,8 +697,29 @@ class NBADataScraper:
                     'Offense Four Factors_FT/FGA': 'FT_Rate'
                 }
 
-                # Rename columns
-                df = df.rename(columns=col_map)
+                # Create a reverse mapping to find variations of column names
+                reverse_map = {}
+                for target, mapped in col_map.items():
+                    reverse_map[mapped] = [target]
+                    # Add variations for the Four Factors stats
+                    if 'Four Factors' in target:
+                        base_name = target.split('_')[1]
+                        reverse_map[mapped].extend([
+                            base_name,
+                            f"Team_{base_name}",
+                            f"Advanced_{base_name}"
+                        ])
+
+                # Find the actual column names in the DataFrame
+                final_col_map = {}
+                for mapped, variations in reverse_map.items():
+                    for var in variations:
+                        if var in df.columns:
+                            final_col_map[var] = mapped
+                            break
+
+                # Rename columns using the found mappings
+                df = df.rename(columns=final_col_map)
 
                 # Remove League Average and duplicate rows
                 df = df[~df['Team'].str.contains('League Average|Division', na=False)]
@@ -688,8 +729,8 @@ class NBADataScraper:
 
                 # Normalize team names
                 df['Team'] = df['Team'].replace(self.team_name_map)
-                # Apply remove_emojis to team names before returning
-                df['Team'] = df['Team'].apply(self.remove_emojis) # ADDED
+                # Apply remove_emojis to team names
+                df['Team'] = df['Team'].apply(self.remove_emojis)
 
                 # Select and reorder columns
                 keep_cols = [

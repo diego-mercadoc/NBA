@@ -232,7 +232,7 @@ class ModelTuner:
             
             if len(df_hist) == 0:
                 logging.warning("No historical games found for rolling stats")
-                return df
+                return games_df
             
             # Calculate points scored and allowed for historical games
             df_hist['Home_Points_Scored'] = df_hist['Home_Points'].fillna(0).astype(float)
@@ -264,11 +264,11 @@ class ModelTuner:
                     latest_diff = float(team_games[f'Point_Diff_Roll{window}'].iloc[-1] if len(team_games) > 0 else 0)
                     
                     # Update home games
-                    df.loc[games_df['Home_Team'] == team, f'Home_Point_Diff_Roll{window}'] = latest_diff
+                    games_df.loc[games_df['Home_Team'] == team, f'Home_Point_Diff_Roll{window}'] = latest_diff
                     # Update away games
-                    df.loc[games_df['Away_Team'] == team, f'Away_Point_Diff_Roll{window}'] = latest_diff
+                    games_df.loc[games_df['Away_Team'] == team, f'Away_Point_Diff_Roll{window}'] = latest_diff
             
-            return df
+            return games_df
             
         except Exception as e:
             logging.error(f"Error in compute_rolling_stats: {str(e)}")

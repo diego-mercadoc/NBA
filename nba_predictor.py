@@ -81,17 +81,18 @@ class NBAPredictor:
         """Prepare features for ML models with enhanced engineering"""
         df = games_df.copy()
         
-        # Calculate win/loss columns
-        df['Home_Win'] = (df['Home_Points'] > df['Away_Points']).astype(int)
-        df['Away_Win'] = (df['Away_Points'] > df['Home_Points']).astype(int)
+        # Calculate win/loss columns for historical games only
+        historical_games = df[~df['Is_Future']].copy()
+        historical_games['Home_Win'] = (historical_games['Home_Points'] > historical_games['Away_Points']).astype(int)
+        historical_games['Away_Win'] = (historical_games['Away_Points'] > historical_games['Home_Points']).astype(int)
         
-        # Calculate win rates with exponential weighting
+        # Calculate win rates with exponential weighting using historical games only
         for team_type in ['Home', 'Away']:
             if team_type == 'Home':
-                team_stats = df.groupby(f'{team_type}_Team')['Home_Win'].agg(['count', 'mean'])
+                team_stats = historical_games.groupby(f'{team_type}_Team')['Home_Win'].agg(['count', 'mean'])
                 df[f'{team_type}_Win_Rate'] = df[f'{team_type}_Team'].map(team_stats['mean'])
             else:
-                team_stats = df.groupby(f'{team_type}_Team')['Home_Win'].agg(['count', 'mean'])
+                team_stats = historical_games.groupby(f'{team_type}_Team')['Home_Win'].agg(['count', 'mean'])
                 df[f'{team_type}_Win_Rate'] = df[f'{team_type}_Team'].map(1 - team_stats['mean'])
         
         # Fill NaN values in win rates with 0.5 (neutral)
@@ -111,9 +112,9 @@ class NBAPredictor:
             axis=1
         )
         
-        # Fill NaN values in rest days with median
-        df['Home_Rest_Days'] = df['Home_Rest_Days'].fillna(df['Home_Rest_Days'].median())
-        df['Away_Rest_Days'] = df['Away_Rest_Days'].fillna(df['Away_Rest_Days'].median())
+        # Fill NaN values in rest days with median from historical games
+        df['Home_Rest_Days'] = df['Home_Rest_Days'].fillna(historical_games['Home_Rest_Days'].median())
+        df['Away_Rest_Days'] = df['Away_Rest_Days'].fillna(historical_games['Away_Rest_Days'].median())
         df['Rest_Advantage'] = df['Home_Rest_Days'] - df['Away_Rest_Days']
         
         # Fill NaN values in streaks with 0
@@ -140,6 +141,16 @@ class NBAPredictor:
             'Streak_Form_Interaction'
         ]
         X = df[feature_cols].fillna(0)
+        
+        # Add debug logging
+        logging.info(f"Feature statistics for {len(df)} games:")
+        for col in feature_cols:
+            stats = X[col].describe()
+            logging.info(f"{col}:")
+            logging.info(f"  Mean: {stats['mean']:.3f}")
+            logging.info(f"  Std: {stats['std']:.3f}")
+            logging.info(f"  Min: {stats['min']:.3f}")
+            logging.info(f"  Max: {stats['max']:.3f}")
         
         return X
     
@@ -261,6 +272,8 @@ class NBAPredictor:
         joblib.dump(self.spread_model, 'models/spread_model.joblib')
         joblib.dump(self.totals_model, 'models/totals_model.joblib')
         joblib.dump(self.scaler, 'models/scaler.joblib')
+        joblib.dump(self.xgb_classifier, 'models/xgb_classifier.joblib')
+        joblib.dump(self.lgb_classifier, 'models/lgb_classifier.joblib')
         logging.info("Models saved successfully")
     
     def load_models(self):
@@ -270,6 +283,8 @@ class NBAPredictor:
             self.spread_model = joblib.load('models/spread_model.joblib')
             self.totals_model = joblib.load('models/totals_model.joblib')
             self.scaler = joblib.load('models/scaler.joblib')
+            self.xgb_classifier = joblib.load('models/xgb_classifier.joblib')
+            self.lgb_classifier = joblib.load('models/lgb_classifier.joblib')
             logging.info("Models loaded successfully")
             return True
         except Exception as e:
