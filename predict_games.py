@@ -5,6 +5,7 @@ from nba_scraper import NBADataScraper
 from nba_predictor import NBAPredictor
 import os
 import shutil
+from datetime import datetime
 
 def main():
     """Train models and generate predictions for today's games"""
@@ -30,6 +31,13 @@ def main():
         logging.info("Loading historical data...")
         games_df = pd.read_csv('nba_games_all.csv')
         games_df['Date'] = pd.to_datetime(games_df['Date'])
+        
+        # Filter out data before October 18, 2022
+        cutoff_date = pd.Timestamp('2022-10-18')
+        initial_rows = len(games_df)
+        games_df = games_df[games_df['Date'] >= cutoff_date].copy()
+        removed_rows = initial_rows - len(games_df)
+        logging.info(f"Removed {removed_rows} games before {cutoff_date.date()}")
         
         # Convert Is_Future to boolean
         games_df['Is_Future'] = games_df['Is_Future'].astype(bool)

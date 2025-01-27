@@ -1,3 +1,5 @@
+# flake8: noqa
+import shutil
 import pandas as pd
 import calendar
 from datetime import datetime, timedelta
@@ -9,6 +11,9 @@ import requests
 from requests.exceptions import RequestException, HTTPError
 import json  # Add at top with other imports
 from io import StringIO
+from bs4 import BeautifulSoup
+import pytz
+import os
 
 # Configure logging
 logging.basicConfig(
@@ -19,6 +24,28 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
+
+def get_mexico_city_time():
+    """
+    Get the current date and time in Mexico City timezone.
+    
+    Returns:
+        datetime: Current datetime in Mexico City timezone
+    """
+    mexico_tz = pytz.timezone('America/Mexico_City')
+    utc_now = datetime.now(pytz.UTC)
+    return utc_now.astimezone(mexico_tz)
+
+def get_training_cutoff_date():
+    """
+    Get the cutoff date for model training (yesterday in Mexico City time).
+    
+    Returns:
+        datetime: Yesterday's date in Mexico City timezone
+    """
+    mexico_now = get_mexico_city_time()
+    cutoff_date = mexico_now.date() - timedelta(days=1)
+    return cutoff_date
 
 class NBADataScraper:
     """
@@ -491,7 +518,44 @@ class NBADataScraper:
         season_games = []
         season_config = season_months[season]
         
-        # Try full season page first
+        # For current season, prioritize monthly data
+        if season == 2025:
+            logging.info("Current season - prioritizing monthly data for freshness")
+            for month, year in season_config['months']:
+                try:
+                    month_games = self.get_monthly_games(season, month)
+                    if month_games is not None:
+                        # Add the correct year to the dates
+                        month_games['Date'] = pd.to_datetime(month_games['Date'])
+                        month_games['Date'] = month_games['Date'].apply(
+                            lambda x: x.replace(year=year)
+                        )
+                        season_games.append(month_games)
+                        self.progress['last_month'] = month
+                        self.save_progress()
+                    
+                    # Reduced cooldown between months
+                    if month != season_config['months'][-1][0]:
+                        cooldown = random.uniform(1, 2)
+                        logging.info(f"Month complete - cooling down for {cooldown:.2f} seconds")
+                        time.sleep(cooldown)
+                        
+                except Exception as e:
+                    logging.error(f"Error scraping {month} {year}: {str(e)}")
+                    self.progress['last_season'] = season
+                    self.progress['last_month'] = month
+                    self.save_progress()
+                    raise e
+                    
+            if season_games:
+                season_df = pd.concat(season_games, ignore_index=True)
+                # Remove duplicates before validation
+                season_df = season_df.drop_duplicates(subset=['Date', 'Away_Team', 'Home_Team'], keep='first')
+                if self.validate_season_data(season_df, season):
+                    return season_df
+            return None
+        
+        # For past seasons, try full season page first
         try:
             full_season_df = self.get_monthly_games(season, None)
             if full_season_df is not None and not full_season_df.empty:
@@ -1114,25 +1178,24 @@ class NBADataScraper:
 
     def get_current_games(self):
         """
-        Get games for the current date or next available game date.
+        Get games scheduled for today.
         
         Returns:
-            pd.DataFrame: DataFrame containing today's games and relevant betting metrics
+            pd.DataFrame: DataFrame containing today's games
         """
         try:
-            current_date = datetime.now()
+            current_date = get_mexico_city_time()
             # For NBA season, if we're in Oct-Dec, we're in the next year's season
             season = current_date.year + 1 if current_date.month >= 10 else current_date.year
             month = current_date.strftime('%B').lower()
             
-            # Try to get games directly from the website
             url = f"https://www.basketball-reference.com/leagues/NBA_{season}_games-{month}.html"
             logging.info(f"Fetching current games from {url}")
             
             dfs = self._make_request(url)
             if dfs and len(dfs) > 0:
                 df = dfs[0]
-                df['Date'] = pd.to_datetime(df['Date'])
+                df['Date'] = pd.to_datetime(df['Date']).dt.tz_localize('America/Mexico_City')
                 
                 # Get today's games
                 today_games = df[df['Date'].dt.date == current_date.date()].copy()
@@ -1157,7 +1220,7 @@ class NBADataScraper:
                     
                     # Calculate rest days and streaks
                     games_df = pd.read_csv('nba_games_all.csv')
-                    games_df['Date'] = pd.to_datetime(games_df['Date'])
+                    games_df['Date'] = pd.to_datetime(games_df['Date']).dt.tz_localize('America/Mexico_City')
                     
                     # Add rest days
                     for team_type in ['Home', 'Away']:
@@ -1189,7 +1252,7 @@ class NBADataScraper:
                             team_games = games_df[
                                 (games_df[f'{team_type}_Team'] == team) |
                                 (games_df[f'{"Away" if team_type == "Home" else "Home"}_Team'] == team)
-                            ].sort_values('Date').tail(10)
+                            ].sort_values('Date', ascending=False).head(10)  # Last 10 games
                             
                             # Calculate streak
                             if not team_games.empty:
@@ -1207,7 +1270,7 @@ class NBADataScraper:
                                 streaks.append(current_streak)
                                 
                                 # Calculate rolling stats (last 5 games)
-                                last_5 = team_games.tail(5)
+                                last_5 = team_games.head(5)
                                 if team_type == 'Home':
                                     points_scored = last_5[last_5['Home_Team'] == team]['Home_Points'].mean()
                                     points_allowed = last_5[last_5['Home_Team'] == team]['Away_Points'].mean()
@@ -1220,23 +1283,21 @@ class NBADataScraper:
                                 rolling_stats['Point_Diff'].append(points_scored - points_allowed)
                             else:
                                 streaks.append(0)
-                                for stat in rolling_stats:
-                                    rolling_stats[stat].append(0)
+                                rolling_stats['Points_Scored'].append(None)
+                                rolling_stats['Points_Allowed'].append(None)
+                                rolling_stats['Point_Diff'].append(None)
                         
                         today_games[f'{team_type}_Streak'] = streaks
-                        for stat, values in rolling_stats.items():
-                            today_games[f'{team_type}_{stat}_Roll5'] = values
-                    
-                    logging.info(f"\nGames for {current_date.date()}:")
-                    for _, game in today_games.iterrows():
-                        logging.info(f"\n{game['Away_Team']} @ {game['Home_Team']}")
-                        logging.info(f"Home Streak: {game['Home_Streak']}, Away Streak: {game['Away_Streak']}")
-                        logging.info(f"Home L5 Point Diff: {game['Home_Point_Diff_Roll5']:.1f}")
-                        logging.info(f"Away L5 Point Diff: {game['Away_Point_Diff_Roll5']:.1f}")
+                        today_games[f'{team_type}_Points_Scored_Roll5'] = rolling_stats['Points_Scored']
+                        today_games[f'{team_type}_Points_Allowed_Roll5'] = rolling_stats['Points_Allowed']
+                        today_games[f'{team_type}_Point_Diff_Roll5'] = rolling_stats['Point_Diff']
                     
                     return today_games
                 
-            logging.info("No upcoming games found in the dataset")
+                logging.info("No games scheduled for today")
+                return None
+            
+            logging.warning(f"Could not find games table at {url}")
             return None
             
         except Exception as e:
@@ -1290,6 +1351,34 @@ class NBADataScraper:
             logging.error(f"Error generating betting insights: {str(e)}")
             return None
 
+    def get_training_data(self):
+        """
+        Get all games data up to the training cutoff date (yesterday in Mexico City time).
+        
+        Returns:
+            pd.DataFrame: DataFrame containing all games up to the cutoff date
+        """
+        try:
+            # Read the full dataset
+            df = pd.read_csv('nba_games_all.csv')
+            df['Date'] = pd.to_datetime(df['Date'])
+            
+            # Get cutoff date
+            cutoff_date = get_training_cutoff_date()
+            logging.info(f"Filtering data up to cutoff date: {cutoff_date}")
+            
+            # Filter data
+            training_data = df[df['Date'].dt.date <= cutoff_date].copy()
+            
+            # Validate the filtered data
+            if self.validate_season_data(training_data, 2025):  # Current season
+                return training_data
+            return None
+            
+        except Exception as e:
+            logging.error(f"Error getting training data: {str(e)}")
+            return None
+
 def main():
     """
     Main execution function that orchestrates the NBA data scraping process.
@@ -1312,12 +1401,13 @@ def main():
         # Determine if we need a full scrape or just an update
         if existing_games is not None:
             last_game_date = existing_games['Date'].max()
-            current_date = datetime.now()
-            days_since_update = (current_date - last_game_date).days
+            current_date = get_mexico_city_time()
+            days_since_update = (current_date.date() - last_game_date.date()).days
             
             if days_since_update < 1:
                 logging.info("Data is up to date, no scraping needed")
                 games_df = existing_games
+                needs_retrain = False
             else:
                 logging.info(f"Data is {days_since_update} days old, updating current season only")
                 games_df = scraper.get_all_games(recent_only=True)
@@ -1326,10 +1416,12 @@ def main():
                     existing_games = existing_games[existing_games['Season'] != 2025]
                     # Combine with new games
                     games_df = pd.concat([existing_games, games_df], ignore_index=True)
+                    needs_retrain = True
         else:
             # No existing data, do a full scrape
             logging.info("Scraping all seasons...")
             games_df = scraper.get_all_games()
+            needs_retrain = True
         
         if games_df is not None:
             logging.info(f"Successfully scraped {len(games_df)} games")
@@ -1356,6 +1448,68 @@ def main():
             logging.info("Saving games data...")
             games_df.to_csv('nba_games_all.csv', index=False)
             logging.info("Games data saved successfully")
+            
+            # Check if we need to retrain models
+            if needs_retrain:
+                logging.info("New data detected, initiating model retraining...")
+                try:
+                    # Get training data up to cutoff date
+                    training_data = scraper.get_training_data()
+                    if training_data is not None:
+                        # Initialize predictor
+                        from nba_predictor import NBAPredictor
+                        predictor = NBAPredictor()
+                        
+                        # Load previous model metrics if they exist
+                        try:
+                            with open('models/metrics_history.json', 'r') as f:
+                                metrics_history = json.load(f)
+                            previous_metrics = metrics_history[-1] if metrics_history else None
+                        except (FileNotFoundError, json.JSONDecodeError):
+                            previous_metrics = None
+                        
+                        # Train new models
+                        new_metrics = predictor.train_models(training_data)
+                        
+                        # Validate performance
+                        if previous_metrics:
+                            accuracy_drop = previous_metrics['moneyline_accuracy'] - new_metrics['moneyline_accuracy']
+                            rmse_increase = new_metrics['spread_rmse'] - previous_metrics['spread_rmse']
+                            
+                            if accuracy_drop > 0.02 or rmse_increase > 1.0:
+                                logging.warning("Performance regression detected, keeping previous models")
+                                if os.path.exists('models/backup'):
+                                    # Restore previous models
+                                    for file in os.listdir('models/backup'):
+                                        shutil.copy(f'models/backup/{file}', f'models/{file}')
+                            else:
+                                # Backup current models before saving new ones
+                                if not os.path.exists('models/backup'):
+                                    os.makedirs('models/backup')
+                                for file in os.listdir('models'):
+                                    if file.endswith('.joblib'):
+                                        shutil.copy(f'models/{file}', f'models/backup/{file}')
+                                
+                                # Save new models
+                                predictor.save_models()
+                                
+                                # Update metrics history
+                                metrics_history = metrics_history[-2:] + [new_metrics] if metrics_history else [new_metrics]
+                                with open('models/metrics_history.json', 'w') as f:
+                                    json.dump(metrics_history, f)
+                                
+                                logging.info("Models successfully retrained and saved")
+                        else:
+                            # First time training, just save the models and metrics
+                            predictor.save_models()
+                            with open('models/metrics_history.json', 'w') as f:
+                                json.dump([new_metrics], f)
+                            logging.info("Initial models trained and saved")
+                            
+                except Exception as e:
+                    logging.error(f"Error during model retraining: {str(e)}")
+            else:
+                logging.info("No new data, skipping model retraining")
             
             # Get current games and betting insights
             logging.info("\nAnalyzing current games...")
