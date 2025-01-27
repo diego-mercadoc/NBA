@@ -1,3 +1,4 @@
+# nba_scraper.py
 # flake8: noqa
 import shutil
 import pandas as pd
@@ -14,6 +15,8 @@ from io import StringIO
 from bs4 import BeautifulSoup
 import pytz
 import os
+from model_tuner import ModelTuner   # <-- ADD THIS IMPORT
+import sys # ADDED
 
 # Configure logging
 logging.basicConfig(
@@ -21,27 +24,30 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler('nba_scraper.log'),
-        logging.StreamHandler()
-    ]
+        logging.StreamHandler(sys.stdout) # MODIFIED HANDLER
+    ], 
+    encoding='utf-8' # ADDED ENCODING
 )
 
 def get_mexico_city_time():
     """
-    Get the current date and time in Mexico City timezone.
-    
+    Get the current date and time in Mexico City timezone (naive datetime).
+
     Returns:
-        datetime: Current datetime in Mexico City timezone
+        datetime: Current datetime in Mexico City timezone (naive)
     """
     mexico_tz = pytz.timezone('America/Mexico_City')
     utc_now = datetime.now(pytz.UTC)
-    return utc_now.astimezone(mexico_tz)
+    mexico_aware = utc_now.astimezone(mexico_tz)
+    return mexico_aware.replace(tzinfo=None) # Return naive datetime
+
 
 def get_training_cutoff_date():
     """
-    Get the cutoff date for model training (yesterday in Mexico City time).
-    
+    Get the cutoff date for model training (yesterday in Mexico City time, naive).
+
     Returns:
-        datetime: Yesterday's date in Mexico City timezone
+        datetime: Yesterday's date in Mexico City timezone (naive)
     """
     mexico_now = get_mexico_city_time()
     cutoff_date = mexico_now.date() - timedelta(days=1)
@@ -50,7 +56,7 @@ def get_training_cutoff_date():
 class NBADataScraper:
     """
     A class to scrape and process NBA game data and team statistics from Basketball-Reference.
-    
+
     Features:
     - Scrapes game results and advanced team statistics
     - Calculates rest days between games for each team
@@ -58,7 +64,7 @@ class NBADataScraper:
     - Computes rolling statistics (points scored, allowed, differential)
     - Validates data completeness and accuracy
     """
-    
+
     def __init__(self, start_season, end_season):
         self.start_season = start_season
         self.end_season = end_season
@@ -76,7 +82,7 @@ class NBADataScraper:
         self.last_request_time = 0
         self.progress_file = 'scraper_progress.json'
         self.load_progress()
-        
+
         # Expanded team name mapping
         self.team_name_map = {
             "LA Clippers": "Los Angeles Clippers",
@@ -90,7 +96,7 @@ class NBADataScraper:
             "BRK": "Brooklyn Nets",
             "CHO": "Charlotte Hornets"
         }
-    
+
     def load_progress(self):
         """Load scraping progress from file."""
         try:
@@ -116,30 +122,30 @@ class NBADataScraper:
         current_time = time.time()
         elapsed = current_time - self.last_request_time
         base_wait = 0.5  # Reduced from previous value
-        
+
         # Add smaller random jitter between 0-1 seconds
         jitter = random.uniform(0, 1)
         total_wait = base_wait + jitter
-        
+
         if elapsed < total_wait:
             wait_time = total_wait - elapsed
             logging.info(f"Rate limiting: waiting {wait_time:.2f} seconds...")
             time.sleep(wait_time)
         self.last_request_time = time.time()
-    
+
     def _make_request(self, url, retries=0):
         """Make a request with exponential backoff retry logic and randomization."""
         if retries >= self.max_retries:
             raise Exception(f"Max retries ({self.max_retries}) exceeded for URL: {url}")
-        
+
         try:
             self._wait_for_rate_limit()
             response = self.session.get(url)
             response.raise_for_status()
-            
+
             # Reduced delay after successful request (0.5-1 seconds)
             time.sleep(random.uniform(0.5, 1))
-            
+
             dfs = pd.read_html(StringIO(response.text))
             return dfs
         except (requests.exceptions.RequestException, HTTPError) as e:
@@ -147,31 +153,31 @@ class NBADataScraper:
             base_wait = (2 ** retries) * self.min_request_interval
             jitter = random.uniform(0, base_wait * 0.1)  # 10% jitter
             wait_time = base_wait + jitter
-            
+
             logging.warning(f"Request failed ({str(e)}), waiting {wait_time:.2f} seconds before retry {retries + 1}/{self.max_retries}")
             time.sleep(wait_time)
             return self._make_request(url, retries + 1)
-    
+
     def validate_season_data(self, df, season):
         """
         Validate season data for completeness and accuracy.
-        
+
         Args:
             df (pd.DataFrame): DataFrame containing season's game data
             season (int): NBA season year (e.g., 2024 for 2023-24 season)
-            
+
         Returns:
             bool: True if data passes validation, False otherwise
         """
         if df is None or df.empty:
             logging.warning(f"No data found for season {season}")
             return False
-        
+
         # Get current date for validation
         current_date = datetime.now()
         season_start_year = season - 1
         season_end_year = season
-        
+
         # Define expected games for different seasons
         expected_games = {
             2021: 1080,  # COVID-shortened season (72 games per team)
@@ -180,38 +186,38 @@ class NBADataScraper:
             2024: 1230,
             2025: None   # Current season, partial data expected
         }
-        
+
         # Check if we're in current season
         is_current_season = (
             (current_date.year == season_start_year and current_date.month >= 10) or
             (current_date.year == season_end_year and current_date.month <= 6)
         )
-        
+
         # For current season
         if is_current_season:
             # Convert dates if needed
             if not pd.api.types.is_datetime64_any_dtype(df['Date']):
                 df['Date'] = pd.to_datetime(df['Date'])
-            
+
             # Split into played and scheduled games
             played_games = df[df['Date'] <= current_date]
             scheduled_games = df[
-                (df['Date'] > current_date) & 
+                (df['Date'] > current_date) &
                 (df['Date'] <= pd.Timestamp('2025-04-13'))
             ]
-            
+
             logging.info(f"Current season ({season_start_year}-{season_end_year}) status:")
             logging.info(f"- Played games: {len(played_games)}")
             logging.info(f"- Scheduled future games: {len(scheduled_games)}")
             logging.info(f"- Total games: {len(df)}")
-            
+
             # Basic validation for current season
             if len(played_games) < 100:  # Minimum games for season start
                 logging.warning("Unusually low number of played games")
                 return False
-            
+
             return True
-            
+
         # For completed seasons
         elif season in expected_games and expected_games[season] is not None:
             actual_games = len(df)
@@ -221,24 +227,24 @@ class NBADataScraper:
                     f"Found {actual_games}, expected {expected_games[season]}"
                 )
                 return False
-        
+
         # Check for duplicate games
         duplicates = df.duplicated(subset=['Date', 'Away_Team', 'Home_Team'], keep=False)
         if duplicates.any():
             logging.warning(f"Found {duplicates.sum()} duplicate games in season {season}")
             df = df.drop_duplicates(subset=['Date', 'Away_Team', 'Home_Team'], keep='first')
-        
+
         logging.info(f"Validation complete for season {season}")
         return True
-    
+
     def get_monthly_games(self, season, month):
         """
         Scrape games for a specific month and season from Basketball-Reference.
-        
+
         Args:
             season (int): NBA season year (e.g., 2024 for 2023-24 season)
             month (str or None): Month name in lowercase, or None for full season page
-            
+
         Returns:
             pd.DataFrame or None: DataFrame containing game data if successful, None otherwise
         """
@@ -247,7 +253,7 @@ class NBADataScraper:
             url = f"https://www.basketball-reference.com/leagues/NBA_{season}_games.html"
         else:
             url = f"https://www.basketball-reference.com/leagues/NBA_{season}_games-{month}.html"
-        
+
         try:
             logging.info(f"Fetching data from {url}")
             dfs = self._make_request(url)
@@ -258,7 +264,7 @@ class NBADataScraper:
                 if not all(col in df.columns for col in required_cols):
                     logging.warning(f"Unexpected table format at {url}")
                     return None
-                
+
                 # Clean column names
                 df.rename(columns={
                     'Visitor/Neutral': 'Away_Team',
@@ -267,34 +273,34 @@ class NBADataScraper:
                     'PTS.1': 'Home_Points',
                     'Start (ET)': 'Start_Time'
                 }, inplace=True)
-                
+
                 # Add season info
                 df['Season'] = season
                 df['Month'] = month if month else ''
-                
+
                 # Normalize team names
                 df['Away_Team'] = df['Away_Team'].replace(self.team_name_map)
                 df['Home_Team'] = df['Home_Team'].replace(self.team_name_map)
-                
+
                 # Convert dates and handle season transitions
                 df['Date'] = pd.to_datetime(df['Date'])
-                
+
                 # For current season (2024-25), mark future and scheduled games
                 current_date = datetime.now()
                 if season == 2025:
                     df['Is_Future'] = df['Date'] > current_date
                     df['Is_Scheduled'] = df['Date'] <= pd.Timestamp('2025-04-13')
                     df['Is_Played'] = ~df['Is_Future']
-                    
+
                     future_count = df['Is_Future'].sum()
                     scheduled_count = df['Is_Scheduled'].sum()
                     played_count = df['Is_Played'].sum()
-                    
+
                     logging.info(f"Current season status for {month if month else 'full season'} {season}:")
                     logging.info(f"- Played games: {played_count}")
                     logging.info(f"- Future scheduled games: {scheduled_count}")
                     logging.info(f"- Future unscheduled games: {future_count - scheduled_count}")
-                
+
                 logging.info(f"Successfully scraped {len(df)} games for {month if month else 'full season'} {season}")
                 return df
 
@@ -304,17 +310,17 @@ class NBADataScraper:
             else:
                 logging.error(f"Error scraping {url}: {str(e)}")
             return None
-    
+
     def clean_games_data(self, games_df):
         """
         Clean and enhance the games dataset with additional metrics.
-        
+
         Args:
             games_df (pd.DataFrame): Raw games DataFrame
-            
+
         Returns:
             pd.DataFrame or None: Cleaned and enhanced DataFrame if successful, None if input is invalid
-            
+
         Enhancements:
         - Converts dates to datetime format
         - Cleans numeric data (points)
@@ -328,7 +334,7 @@ class NBADataScraper:
             return None
 
         logging.info("Starting data cleaning process...")
-        
+
         # Convert date and handle timezones
         games_df['Date'] = pd.to_datetime(games_df['Date'])
         logging.info("Converted dates to datetime format")
@@ -360,11 +366,11 @@ class NBADataScraper:
 
         logging.info(f"Data cleaning complete. Final dataset contains {len(games_df)} games")
         return games_df
-    
+
     def add_rest_days(self, df):
         """Calculate days of rest for each team"""
         df = df.sort_values('Date')
-        
+
         for team_type in ['Home', 'Away']:
             rest_days = []
             for team in df[f'{team_type}_Team'].unique():
@@ -372,20 +378,20 @@ class NBADataScraper:
                 team_games['Days_Rest'] = (team_games['Date'] - team_games['Date'].shift(1)).dt.days
                 rest_days.extend(team_games['Days_Rest'].tolist())
             df[f'{team_type}_Rest_Days'] = rest_days
-        
+
         return df
-    
+
     def add_streaks(self, df):
         """Calculate winning and losing streaks for each team"""
         df = df.sort_values('Date')
         df['Home_Streak'] = 0
         df['Away_Streak'] = 0
-        
+
         for team in df['Home_Team'].unique():
             # Get all games for the team (both home and away)
             team_games = df[(df['Home_Team'] == team) | (df['Away_Team'] == team)].copy()
             team_games = team_games.sort_values('Date')
-            
+
             # Calculate streak
             current_streak = 0
             for idx, row in team_games.iterrows():
@@ -393,62 +399,62 @@ class NBADataScraper:
                     won = row['Home_Win'] == 1
                 else:
                     won = row['Home_Win'] == 0
-                
+
                 if won:
                     current_streak = current_streak + 1 if current_streak > 0 else 1
                 else:
                     current_streak = current_streak - 1 if current_streak < 0 else -1
-                
+
                 # Update the streak in the original dataframe
                 if row['Home_Team'] == team:
                     df.loc[idx, 'Home_Streak'] = current_streak
                 else:
                     df.loc[idx, 'Away_Streak'] = current_streak
-        
+
         return df
-    
+
     def get_all_games(self, recent_only=False):
         """
         Get all games data for specified seasons.
-        
+
         Args:
             recent_only (bool): If True, only scrape the current season's games
         """
         all_games = []
         seasons = range(self.start_season, self.end_season + 1)
-        
+
         if recent_only:
             seasons = [self.end_season]
             logging.info("Recent only mode - scraping only current season")
-        
+
         for season in seasons:
             if season in self.progress['completed_seasons'] and not recent_only:
                 logging.info(f"Skipping completed season {season}")
                 continue
-                
+
             logging.info(f"\nScraping season {season}...")
-            
+
             try:
                 season_games = self.get_season_games(season)
                 if season_games is not None and isinstance(season_games, pd.DataFrame):
                     all_games.append(season_games)
-                    
+
                     if not recent_only:
                         self.progress['completed_seasons'].append(season)
                         self.save_progress()
-                
+
                 # Add cooldown between seasons
                 if season != seasons[-1]:
                     cooldown = random.uniform(1, 2)  # Reduced from previous values
                     logging.info(f"Season complete - cooling down for {cooldown:.2f} seconds")
                     time.sleep(cooldown)
-                    
+
             except Exception as e:
                 logging.error(f"Error scraping season {season}: {str(e)}")
                 self.progress['last_season'] = season
                 self.save_progress()
                 raise e
-        
+
         if all_games:
             try:
                 return pd.concat(all_games, ignore_index=True)
@@ -460,10 +466,10 @@ class NBADataScraper:
     def get_season_games(self, season):
         """
         Get all games for a specific season with progress tracking.
-        
+
         Args:
             season (int): NBA season year (e.g., 2024 for 2023-24 season)
-            
+
         Returns:
             pd.DataFrame: DataFrame containing all games for the season
         """
@@ -510,14 +516,14 @@ class NBADataScraper:
                 ]
             }
         }
-        
+
         if season not in season_months:
             logging.error(f"Invalid season year: {season}")
             return None
-            
+
         season_games = []
         season_config = season_months[season]
-        
+
         # For current season, prioritize monthly data
         if season == 2025:
             logging.info("Current season - prioritizing monthly data for freshness")
@@ -533,20 +539,20 @@ class NBADataScraper:
                         season_games.append(month_games)
                         self.progress['last_month'] = month
                         self.save_progress()
-                    
+
                     # Reduced cooldown between months
                     if month != season_config['months'][-1][0]:
                         cooldown = random.uniform(1, 2)
                         logging.info(f"Month complete - cooling down for {cooldown:.2f} seconds")
                         time.sleep(cooldown)
-                        
+
                 except Exception as e:
                     logging.error(f"Error scraping {month} {year}: {str(e)}")
                     self.progress['last_season'] = season
                     self.progress['last_month'] = month
                     self.save_progress()
                     raise e
-                    
+
             if season_games:
                 season_df = pd.concat(season_games, ignore_index=True)
                 # Remove duplicates before validation
@@ -554,7 +560,7 @@ class NBADataScraper:
                 if self.validate_season_data(season_df, season):
                     return season_df
             return None
-        
+
         # For past seasons, try full season page first
         try:
             full_season_df = self.get_monthly_games(season, None)
@@ -563,13 +569,13 @@ class NBADataScraper:
                 return full_season_df
         except Exception as e:
             logging.warning(f"Could not scrape full season page: {str(e)}")
-        
+
         # If full season page fails, try month by month
         for month, year in season_config['months']:
-            if (self.progress['last_season'] == season and 
+            if (self.progress['last_season'] == season and
                 self.progress['last_month'] == month):
                 logging.info(f"Resuming from {month} {year}")
-            
+
             try:
                 month_games = self.get_monthly_games(season, month)
                 if month_games is not None:
@@ -581,20 +587,20 @@ class NBADataScraper:
                     season_games.append(month_games)
                     self.progress['last_month'] = month
                     self.save_progress()
-                
+
                 # Reduced cooldown between months
                 if month != season_config['months'][-1][0]:
                     cooldown = random.uniform(1, 2)  # Reduced from 30-60 to 1-2 seconds
                     logging.info(f"Month complete - cooling down for {cooldown:.2f} seconds")
                     time.sleep(cooldown)
-                    
+
             except Exception as e:
                 logging.error(f"Error scraping {month} {year}: {str(e)}")
                 self.progress['last_season'] = season
                 self.progress['last_month'] = month
                 self.save_progress()
                 raise e
-        
+
         if season_games:
             season_df = pd.concat(season_games, ignore_index=True)
             # Remove duplicates before validation
@@ -603,13 +609,19 @@ class NBADataScraper:
                 return season_df
         return None
     
+    def remove_emojis(self, text): # ADDED
+        """Removes emojis and non-ascii characters from string"""
+        if isinstance(text, str):
+            return text.encode('ascii', 'ignore').decode('ascii').strip()
+        return text
+
     def get_team_stats(self, season):
         """
         Scrape advanced team stats for a specific season.
-        
+
         Args:
             season (int): NBA season year
-            
+
         Returns:
             pd.DataFrame: DataFrame with team stats if successful, None otherwise
         """
@@ -617,10 +629,10 @@ class NBADataScraper:
         try:
             logging.info(f"Fetching team stats from {url}")
             dfs = self._make_request(url)
-            
+
             # Debug logging
             logging.info(f"Found {len(dfs)} tables on the page")
-            
+
             # Try to find the advanced stats table
             advanced_stats_table = None
             for i, df in enumerate(dfs):
@@ -629,15 +641,15 @@ class NBADataScraper:
                     col_names = [col[1] if isinstance(col, tuple) else col for col in df.columns]
                 else:
                     col_names = df.columns
-                
+
                 if 'ORtg' in col_names or 'DRtg' in col_names:
                     logging.info(f"Found advanced stats in table {i}")
                     advanced_stats_table = df
                     break
-            
+
             if advanced_stats_table is not None:
                 df = advanced_stats_table
-                
+
                 # Handle multi-index columns
                 if isinstance(df.columns, pd.MultiIndex):
                     # For columns that are part of 'Offense Four Factors' or 'Defense Four Factors'
@@ -646,10 +658,10 @@ class NBADataScraper:
                         f"{col[0]}_{col[1]}" if 'Four Factors' in str(col[0]) else col[1]
                         for col in df.columns
                     ]
-                
+
                 # Debug logging
                 logging.info(f"Processed columns: {df.columns.tolist()}")
-                
+
                 # Map the columns we want
                 col_map = {
                     'Team': 'Team',
@@ -664,41 +676,43 @@ class NBADataScraper:
                     'Offense Four Factors_ORB%': 'ORB_Pct',
                     'Offense Four Factors_FT/FGA': 'FT_Rate'
                 }
-                
+
                 # Rename columns
                 df = df.rename(columns=col_map)
-                
+
                 # Remove League Average and duplicate rows
                 df = df[~df['Team'].str.contains('League Average|Division', na=False)]
-                
+
                 # Add season info
                 df['Season'] = season
-                
+
                 # Normalize team names
                 df['Team'] = df['Team'].replace(self.team_name_map)
-                
+                # Apply remove_emojis to team names before returning
+                df['Team'] = df['Team'].apply(self.remove_emojis) # ADDED
+
                 # Select and reorder columns
                 keep_cols = [
-                    'Team', 'Season', 'Wins', 'Losses', 
+                    'Team', 'Season', 'Wins', 'Losses',
                     'ORtg', 'DRtg', 'Pace', 'SRS',
                     'eFG_Pct', 'TOV_Pct', 'ORB_Pct', 'FT_Rate'
                 ]
-                
+
                 # Only keep columns that exist
                 keep_cols = [col for col in keep_cols if col in df.columns]
                 df = df[keep_cols]
-                
+
                 # Convert numeric columns
                 numeric_cols = [col for col in keep_cols if col not in ['Team', 'Season']]
                 for col in numeric_cols:
                     df[col] = pd.to_numeric(df[col], errors='coerce')
-                
+
                 logging.info(f"Successfully scraped team stats for season {season}")
                 return df
-            
+
             logging.warning(f"Could not find advanced stats table at {url}")
             return None
-            
+
         except Exception as e:
             logging.error(f"Error scraping team stats for {season}: {str(e)}")
             logging.error(f"Error details: {str(e.__class__.__name__)}")
@@ -707,14 +721,14 @@ class NBADataScraper:
     def add_quarter_stats(self, df, season):
         """
         Add quarter and half-time performance statistics with improved reliability.
-        
+
         Args:
             df (pd.DataFrame): Team stats DataFrame
             season (int): NBA season year
-            
+
         Returns:
             pd.DataFrame: DataFrame with added quarter/half stats
-            
+
         Added statistics:
         - First half scoring average (for/against)
         - Quarter-by-quarter scoring trends
@@ -729,24 +743,24 @@ class NBADataScraper:
                 'Q3_Points_For', 'Q3_Points_Against', 'Q3_Margin',
                 'Q4_Points_For', 'Q4_Points_Against', 'Q4_Margin'
             ]
-            
+
             for col in quarter_cols:
                 df[col] = np.nan
-            
+
             # Get quarter-by-quarter scoring data month by month
             months = ['october', 'november', 'december', 'january', 'february', 'march', 'april', 'may', 'june']
-            
+
             for month in months:
                 url = f"https://www.basketball-reference.com/leagues/NBA_{season}_games-{month}.html"
                 logging.info(f"Fetching quarter stats from {url}")
-                
+
                 try:
                     games_dfs = self._make_request(url)
                     if not games_dfs:
                         continue
-                        
+
                     games_df = games_dfs[0]
-                    
+
                     # Check if quarter columns exist
                     quarter_patterns = {
                         1: ['1st', 'Q1', '1Q'],
@@ -754,7 +768,7 @@ class NBADataScraper:
                         3: ['3rd', 'Q3', '3Q'],
                         4: ['4th', 'Q4', '4Q']
                     }
-                    
+
                     # Find matching column names
                     quarter_cols_found = {}
                     for q, patterns in quarter_patterns.items():
@@ -764,11 +778,11 @@ class NBADataScraper:
                             if home_col and away_col:
                                 quarter_cols_found[q] = (home_col, away_col)
                                 break
-                    
+
                     if not quarter_cols_found:
                         logging.warning(f"No quarter columns found for {month} {season}")
                         continue
-                    
+
                     # Process each team's quarter performance
                     for team in df['Team'].unique():
                         # Get home and away games
@@ -776,10 +790,10 @@ class NBADataScraper:
                         away_mask = games_df['Visitor/Neutral'] == team
                         home_games = games_df[home_mask]
                         away_games = games_df[away_mask]
-                        
+
                         if len(home_games) == 0 and len(away_games) == 0:
                             continue
-                        
+
                         # Calculate quarter stats
                         for quarter, (home_col, away_col) in quarter_cols_found.items():
                             try:
@@ -788,56 +802,56 @@ class NBADataScraper:
                                 home_games[away_col] = pd.to_numeric(home_games[away_col], errors='coerce')
                                 away_games[home_col] = pd.to_numeric(away_games[home_col], errors='coerce')
                                 away_games[away_col] = pd.to_numeric(away_games[away_col], errors='coerce')
-                                
+
                                 # Calculate averages
                                 points_for = (
                                     (home_games[home_col].mean() * len(home_games) +
                                      away_games[away_col].mean() * len(away_games))
                                     / (len(home_games) + len(away_games))
                                 )
-                                
+
                                 points_against = (
                                     (home_games[away_col].mean() * len(home_games) +
                                      away_games[home_col].mean() * len(away_games))
                                     / (len(home_games) + len(away_games))
                                 )
-                                
+
                                 # Update DataFrame
                                 df.loc[df['Team'] == team, f'Q{quarter}_Points_For'] = points_for
                                 df.loc[df['Team'] == team, f'Q{quarter}_Points_Against'] = points_against
                                 df.loc[df['Team'] == team, f'Q{quarter}_Margin'] = points_for - points_against
-                                
+
                             except Exception as e:
                                 logging.warning(f"Error processing Q{quarter} for {team}: {str(e)}")
                                 continue
-                        
+
                         # Calculate first half stats
                         try:
                             q1_for = df.loc[df['Team'] == team, 'Q1_Points_For'].iloc[0]
                             q2_for = df.loc[df['Team'] == team, 'Q2_Points_For'].iloc[0]
                             q1_against = df.loc[df['Team'] == team, 'Q1_Points_Against'].iloc[0]
                             q2_against = df.loc[df['Team'] == team, 'Q2_Points_Against'].iloc[0]
-                            
+
                             if not np.isnan([q1_for, q2_for, q1_against, q2_against]).any():
                                 df.loc[df['Team'] == team, 'FirstHalf_Points_For'] = q1_for + q2_for
                                 df.loc[df['Team'] == team, 'FirstHalf_Points_Against'] = q1_against + q2_against
                                 df.loc[df['Team'] == team, 'FirstHalf_Margin'] = (q1_for + q2_for) - (q1_against + q2_against)
-                        
+
                         except Exception as e:
                             logging.warning(f"Error calculating first half stats for {team}: {str(e)}")
                             continue
-                    
+
                 except Exception as e:
                     logging.warning(f"Error processing {month} {season}: {str(e)}")
                     continue
-            
+
             logging.info("Successfully added quarter and half performance stats")
             return df
-            
+
         except Exception as e:
             logging.error(f"Error adding quarter stats: {str(e)}")
             return df
-    
+
     def get_all_team_stats(self):
         """Scrape team stats for all specified seasons"""
         all_stats = []
@@ -847,31 +861,36 @@ class NBADataScraper:
             if df is not None:
                 all_stats.append(df)
             time.sleep(random.uniform(1, 3))
-        
+
         if all_stats:
             return pd.concat(all_stats, ignore_index=True)
         return None
-    
+
     def compute_rolling_stats(self, games_df, window=5):
         """Compute rolling statistics for teams"""
         try:
+            if games_df is None or games_df.empty:
+                logging.info(f"No games to compute rolling stats for window={window}. Returning DataFrame as-is.")
+                return games_df
+
+            # Proceed with the existing logic only if games_df has rows
             games_df = games_df.copy()
-            
+
             # Debug logging
             logging.info(f"Initial Home_Team dtype: {games_df['Home_Team'].dtype}")
-            
+
             # Convert Is_Future to boolean if it's not already
             if 'Is_Future' in games_df.columns:
                 games_df['Is_Future'] = games_df['Is_Future'].fillna(False).astype(bool)
             else:
                 games_df['Is_Future'] = False
-            
+
             # Calculate points scored and allowed
             games_df['Home_Points_Scored'] = games_df['Home_Points'].fillna(0)
             games_df['Home_Points_Allowed'] = games_df['Away_Points'].fillna(0)
             games_df['Away_Points_Scored'] = games_df['Away_Points'].fillna(0)
             games_df['Away_Points_Allowed'] = games_df['Home_Points'].fillna(0)
-            
+
             # Calculate rolling stats for home teams
             for stat in ['Points_Scored', 'Points_Allowed']:
                 # Calculate rolling stats for each team
@@ -882,7 +901,7 @@ class NBADataScraper:
                             window=window, min_periods=1
                         ).mean()
                         games_df.loc[games_df['Home_Team'] == team, f'Home_{stat}_Roll{window}'] = team_games[f'Home_{stat}_Roll{window}']
-            
+
             # Calculate rolling stats for away teams
             for stat in ['Points_Scored', 'Points_Allowed']:
                 # Calculate rolling stats for each team
@@ -893,19 +912,24 @@ class NBADataScraper:
                             window=window, min_periods=1
                         ).mean()
                         games_df.loc[games_df['Away_Team'] == team, f'Away_{stat}_Roll{window}'] = team_games[f'Away_{stat}_Roll{window}']
-            
+
             # Calculate point differentials
             games_df[f'Home_Point_Diff_Roll{window}'] = games_df[f'Home_Points_Scored_Roll{window}'] - games_df[f'Home_Points_Allowed_Roll{window}']
             games_df[f'Away_Point_Diff_Roll{window}'] = games_df[f'Away_Points_Scored_Roll{window}'] - games_df[f'Away_Points_Allowed_Roll{window}']
-            
+
             # Ensure team columns are strings
             games_df['Home_Team'] = games_df['Home_Team'].astype(str)
             games_df['Away_Team'] = games_df['Away_Team'].astype(str)
-            
+
             # Fill any remaining NaN values with 0
             roll_cols = [col for col in games_df.columns if 'Roll' in col]
             games_df[roll_cols] = games_df[roll_cols].fillna(0)
             
+            # Apply emoji removal to betting insights (after calculating rolling stats)
+            if 'Home_Form' in games_df.columns and 'Away_Form' in games_df.columns: # ADDED check
+               games_df['Home_Form'] = games_df['Home_Form'].apply(self.remove_emojis) # ADDED
+               games_df['Away_Form'] = games_df['Away_Form'].apply(self.remove_emojis) # ADDED
+
             return games_df
         except Exception as e:
             logging.error(f"Error in compute_rolling_stats: {str(e)}")
@@ -914,13 +938,13 @@ class NBADataScraper:
     def get_player_stats(self, season):
         """
         Scrape player performance statistics for props betting.
-        
+
         Args:
             season (int): NBA season year
-            
+
         Returns:
             pd.DataFrame: DataFrame with player stats if successful, None otherwise
-            
+
         Stats include:
         - Basic: Points, Rebounds, Assists per game
         - Advanced: Usage Rate, Minutes, Efficiency
@@ -931,29 +955,29 @@ class NBADataScraper:
         try:
             logging.info(f"Fetching player stats from {url}")
             dfs = pd.read_html(url)
-            
+
             if dfs:
                 df = dfs[0]
-                
+
                 # Clean up the column names
                 df.columns = df.columns.str.replace('%', 'Pct').str.replace('/', '_per_')
-                
+
                 # Remove rows for players who changed teams (marked with TOT)
                 df = df[df['Tm'] != 'TOT']
-                
+
                 # Add season info
                 df['Season'] = season
-                
+
                 # Calculate per-minute stats
                 if 'MP' in df.columns:
                     for stat in ['PTS', 'TRB', 'AST', 'STL', 'BLK']:
                         if stat in df.columns:
                             df[f'{stat}_per_36'] = df[stat] * 36 / df['MP']
-                
+
                 # Get usage rate and advanced stats
                 advanced_url = f"https://www.basketball-reference.com/leagues/NBA_{season}_advanced.html"
                 logging.info(f"Fetching advanced stats from {advanced_url}")
-                
+
                 adv_dfs = pd.read_html(advanced_url)
                 if adv_dfs:
                     adv_df = adv_dfs[0]
@@ -968,31 +992,31 @@ class NBADataScraper:
                     
                     # Merge with main stats
                     df = df.merge(adv_df, on=['Player', 'Tm'], how='left')
-                
+
                 # Get game logs for recent performance
                 df['Recent_Form'] = df.apply(
                     lambda x: self.get_player_recent_form(season, x['Player']),
                     axis=1
                 )
-                
+
                 logging.info(f"Successfully scraped stats for {len(df)} players")
                 return df
-            
+
             logging.warning(f"Could not find player stats table at {url}")
             return None
-            
+
         except Exception as e:
             logging.error(f"Error scraping player stats: {str(e)}")
             return None
-    
+
     def get_player_recent_form(self, season, player_name):
         """
         Get player's recent performance data for props betting.
-        
+
         Args:
             season (int): NBA season year
             player_name (str): Player's name
-            
+
         Returns:
             dict: Dictionary containing recent performance metrics
         """
@@ -1001,17 +1025,17 @@ class NBADataScraper:
             player_url = player_name.lower().replace(' ', '-')
             # Get first 5 chars of last name + first 2 of first name + 01 (BR's format)
             player_id = f"{player_url.split('-')[-1][:5]}{player_url.split('-')[0][:2]}01"
-            
+
             url = f"https://www.basketball-reference.com/players/{player_id[0]}/{player_id}/gamelog/{season}"
             logging.info(f"Fetching game log for {player_name}")
-            
+
             dfs = pd.read_html(url)
             if dfs:
                 games_df = dfs[7]  # Regular season game log
                 if not games_df.empty:
                     # Get last 10 games
                     recent_games = games_df.tail(10)
-                    
+
                     # Calculate averages
                     stats = {
                         'Last10_PTS': recent_games['PTS'].mean(),
@@ -1026,9 +1050,9 @@ class NBADataScraper:
                         'Away_PTS': games_df[games_df['Unnamed: 5'] != '@']['PTS'].mean()
                     }
                     return stats
-            
+
             return None
-            
+
         except Exception as e:
             logging.error(f"Error getting recent form for {player_name}: {str(e)}")
             return None
@@ -1036,12 +1060,12 @@ class NBADataScraper:
     def get_player_matchup_stats(self, season, player_name, opponent):
         """
         Get player's performance stats against a specific opponent.
-        
+
         Args:
             season (int): NBA season year
             player_name (str): Player's name
             opponent (str): Opponent team name
-            
+
         Returns:
             dict: Dictionary containing matchup-specific performance metrics
         """
@@ -1050,17 +1074,17 @@ class NBADataScraper:
             player_url = player_name.lower().replace(' ', '-')
             # Get first 5 chars of last name + first 2 of first name + 01 (BR's format)
             player_id = f"{player_url.split('-')[-1][:5]}{player_url.split('-')[0][:2]}01"
-            
+
             url = f"https://www.basketball-reference.com/players/{player_id[0]}/{player_id}/gamelog/{season}"
             logging.info(f"Fetching matchup stats for {player_name} vs {opponent}")
-            
+
             dfs = pd.read_html(url)
             if dfs:
                 games_df = dfs[7]  # Regular season game log
                 if not games_df.empty:
                     # Filter games against the opponent
                     opp_games = games_df[games_df['Opp'] == opponent]
-                    
+
                     if len(opp_games) > 0:
                         # Calculate matchup stats
                         stats = {
@@ -1078,20 +1102,20 @@ class NBADataScraper:
                                 'Assists': opp_games.iloc[-1]['AST']
                             }
                         }
-                        
+
                         # Add performance trends
                         if len(opp_games) >= 2:
                             points_trend = opp_games['PTS'].iloc[-1] - opp_games['PTS'].iloc[-2]
                             stats['Points_Trend'] = points_trend
                             stats['Form_vs_Opponent'] = "🔥" if points_trend > 0 else "❄️"
-                        
+
                         return stats
-                    
+
                     logging.info(f"No games found against {opponent}")
                     return None
-            
+
             return None
-            
+
         except Exception as e:
             logging.error(f"Error getting matchup stats for {player_name} vs {opponent}: {str(e)}")
             return None
@@ -1099,25 +1123,25 @@ class NBADataScraper:
     def analyze_player_props(self, player_name, opponent, player_stats=None, recent_form=None):
         """
         Analyze player props betting opportunities.
-        
+
         Args:
             player_name (str): Player's name
             opponent (str): Opponent team name
             player_stats (dict, optional): Player's season stats
             recent_form (dict, optional): Player's recent performance data
-            
+
         Returns:
             dict: Dictionary containing props betting analysis
         """
         try:
             current_season = datetime.now().year if datetime.now().month >= 10 else datetime.now().year - 1
-            
+
             # Get matchup-specific stats
             matchup_stats = self.get_player_matchup_stats(current_season, player_name, opponent)
-            
+
             if matchup_stats is None:
                 return None
-            
+
             analysis = {
                 'Points': {
                     'Season_Avg': player_stats['PTS'] if player_stats else None,
@@ -1145,33 +1169,33 @@ class NBADataScraper:
                     'Vs_Opponent_Avg': matchup_stats['Minutes_Avg']
                 }
             }
-            
+
             # Add insights
             insights = []
-            
+
             # Points analysis
             if analysis['Points']['Last_5'] and analysis['Points']['Season_Avg']:
                 pts_diff = analysis['Points']['Last_5'] - analysis['Points']['Season_Avg']
                 if abs(pts_diff) > 3:
                     trend = "up" if pts_diff > 0 else "down"
                     insights.append(f"Scoring trend: {trend} ({abs(pts_diff):.1f} pts vs season avg)")
-            
+
             if analysis['Points']['Vs_Opponent_Avg'] and analysis['Points']['Season_Avg']:
                 matchup_diff = analysis['Points']['Vs_Opponent_Avg'] - analysis['Points']['Season_Avg']
                 if abs(matchup_diff) > 3:
                     performance = "better" if matchup_diff > 0 else "worse"
                     insights.append(f"Scores {abs(matchup_diff):.1f} pts {performance} vs {opponent}")
-            
+
             # Minutes analysis
             if analysis['Minutes']['Last_5'] and analysis['Minutes']['Season_Avg']:
                 min_diff = analysis['Minutes']['Last_5'] - analysis['Minutes']['Season_Avg']
                 if abs(min_diff) > 3:
                     trend = "up" if min_diff > 0 else "down"
                     insights.append(f"Minutes trend: {trend} ({abs(min_diff):.1f} min vs season avg)")
-            
+
             analysis['Insights'] = insights
             return analysis
-            
+
         except Exception as e:
             logging.error(f"Error analyzing props for {player_name} vs {opponent}: {str(e)}")
             return None
@@ -1179,27 +1203,27 @@ class NBADataScraper:
     def get_current_games(self):
         """
         Get games scheduled for today.
-        
+
         Returns:
             pd.DataFrame: DataFrame containing today's games
         """
         try:
-            current_date = get_mexico_city_time()
+            current_date = get_mexico_city_time() # Get naive Mexico City time
             # For NBA season, if we're in Oct-Dec, we're in the next year's season
             season = current_date.year + 1 if current_date.month >= 10 else current_date.year
             month = current_date.strftime('%B').lower()
-            
+
             url = f"https://www.basketball-reference.com/leagues/NBA_{season}_games-{month}.html"
             logging.info(f"Fetching current games from {url}")
-            
+
             dfs = self._make_request(url)
             if dfs and len(dfs) > 0:
                 df = dfs[0]
-                df['Date'] = pd.to_datetime(df['Date']).dt.tz_localize('America/Mexico_City')
-                
+                df['Date'] = pd.to_datetime(df['Date']) # Read scraped dates as naive
+
                 # Get today's games
                 today_games = df[df['Date'].dt.date == current_date.date()].copy()
-                
+
                 if not today_games.empty:
                     # Clean column names
                     today_games.rename(columns={
@@ -1208,20 +1232,21 @@ class NBADataScraper:
                         'PTS': 'Away_Points',
                         'PTS.1': 'Home_Points'
                     }, inplace=True)
-                    
+
                     # Add necessary columns
                     today_games['Season'] = season
                     today_games['Is_Future'] = True
                     today_games['Is_Scheduled'] = True
-                    
+
                     # Normalize team names
                     today_games['Away_Team'] = today_games['Away_Team'].replace(self.team_name_map)
                     today_games['Home_Team'] = today_games['Home_Team'].replace(self.team_name_map)
-                    
+
                     # Calculate rest days and streaks
                     games_df = pd.read_csv('nba_games_all.csv')
-                    games_df['Date'] = pd.to_datetime(games_df['Date']).dt.tz_localize('America/Mexico_City')
-                    
+                    games_df['Date'] = pd.to_datetime(games_df['Date']) # Read games_df dates as naive too
+                    games_df = self.clean_games_data(games_df) # Clean games_df here to ensure 'Home_Win' and rest days are calculated
+
                     # Add rest days
                     for team_type in ['Home', 'Away']:
                         rest_days = []
@@ -1230,14 +1255,14 @@ class NBADataScraper:
                                 (games_df[f'{team_type}_Team'] == team) |
                                 (games_df[f'{"Away" if team_type == "Home" else "Home"}_Team'] == team)
                             ]['Date'].max()
-                            
+
                             if pd.notnull(last_game):
                                 days = (current_date - last_game).days
                             else:
                                 days = 7  # Default to a week if no previous games
                             rest_days.append(days)
                         today_games[f'{team_type}_Rest_Days'] = rest_days
-                    
+
                     # Add streaks and rolling stats
                     for team_type in ['Home', 'Away']:
                         streaks = []
@@ -1246,14 +1271,14 @@ class NBADataScraper:
                             'Points_Allowed': [],
                             'Point_Diff': []
                         }
-                        
+
                         for team in today_games[f'{team_type}_Team']:
                             # Get team's recent games
                             team_games = games_df[
                                 (games_df[f'{team_type}_Team'] == team) |
                                 (games_df[f'{"Away" if team_type == "Home" else "Home"}_Team'] == team)
                             ].sort_values('Date', ascending=False).head(10)  # Last 10 games
-                            
+
                             # Calculate streak
                             if not team_games.empty:
                                 current_streak = 0
@@ -1262,13 +1287,13 @@ class NBADataScraper:
                                         won = row['Home_Win'] == 1 if team_type == 'Home' else row['Home_Win'] == 0
                                     else:
                                         won = row['Home_Win'] == 0 if team_type == 'Home' else row['Home_Win'] == 1
-                                    
+
                                     if won:
                                         current_streak = current_streak + 1 if current_streak > 0 else 1
                                     else:
                                         current_streak = current_streak - 1 if current_streak < 0 else -1
                                 streaks.append(current_streak)
-                                
+
                                 # Calculate rolling stats (last 5 games)
                                 last_5 = team_games.head(5)
                                 if team_type == 'Home':
@@ -1277,7 +1302,7 @@ class NBADataScraper:
                                 else:
                                     points_scored = last_5[last_5['Away_Team'] == team]['Away_Points'].mean()
                                     points_allowed = last_5[last_5['Away_Team'] == team]['Home_Points'].mean()
-                                
+
                                 rolling_stats['Points_Scored'].append(points_scored)
                                 rolling_stats['Points_Allowed'].append(points_allowed)
                                 rolling_stats['Point_Diff'].append(points_scored - points_allowed)
@@ -1291,15 +1316,18 @@ class NBADataScraper:
                         today_games[f'{team_type}_Points_Scored_Roll5'] = rolling_stats['Points_Scored']
                         today_games[f'{team_type}_Points_Allowed_Roll5'] = rolling_stats['Points_Allowed']
                         today_games[f'{team_type}_Point_Diff_Roll5'] = rolling_stats['Point_Diff']
-                    
+                    # Apply emoji removal to betting insights (after calculating rolling stats)
+                    if 'Home_Form' in today_games.columns and 'Away_Form' in today_games.columns: # ADDED check
+                       today_games['Home_Form'] = today_games['Home_Form'].apply(self.remove_emojis) # ADDED
+                       today_games['Away_Form'] = today_games['Away_Form'].apply(self.remove_emojis) # ADDED
                     return today_games
-                
+
                 logging.info("No games scheduled for today")
                 return None
-            
+
             logging.warning(f"Could not find games table at {url}")
             return None
-            
+
         except Exception as e:
             logging.error(f"Error getting current games: {str(e)}")
             return None
@@ -1307,20 +1335,20 @@ class NBADataScraper:
     def get_betting_insights(self, games_df=None):
         """
         Generate betting insights for specified games.
-        
+
         Args:
             games_df (pd.DataFrame, optional): DataFrame of games to analyze. If None, uses today's games.
-            
+
         Returns:
             dict: Dictionary containing betting insights for each game
         """
         try:
             if games_df is None:
                 games_df = self.get_current_games()
-            
+
             if games_df is None or games_df.empty:
                 return None
-            
+
             insights = {}
             for _, game in games_df.iterrows():
                 game_key = f"{game['Away_Team']} @ {game['Home_Team']}"
@@ -1329,13 +1357,17 @@ class NBADataScraper:
                 home_form = "🔥" if game['Home_Streak'] > 0 else "❄️" if game['Home_Streak'] < 0 else "➖"
                 away_form = "🔥" if game['Away_Streak'] > 0 else "❄️" if game['Away_Streak'] < 0 else "➖"
                 
+                # Apply emoji removal to form strings # ADDED
+                home_form = self.remove_emojis(home_form) # ADDED
+                away_form = self.remove_emojis(away_form) # ADDED
+
                 # Determine edge based on recent performance
                 home_edge = game['Home_Point_Diff_Roll5'] - game['Away_Point_Diff_Roll5']
                 edge = "Strong Home" if home_edge > 7 else \
                        "Lean Home" if home_edge > 3 else \
                        "Strong Away" if home_edge < -7 else \
                        "Lean Away" if home_edge < -3 else "Pick'em"
-                
+
                 insights[game_key] = {
                     'Home_Form': f"{home_form} ({game['Home_Streak']} streak)",
                     'Away_Form': f"{away_form} ({game['Away_Streak']} streak)",
@@ -1344,9 +1376,9 @@ class NBADataScraper:
                     'Edge': edge,
                     'Confidence': 'High' if abs(home_edge) > 7 else 'Medium' if abs(home_edge) > 3 else 'Low'
                 }
-            
+
             return insights
-            
+
         except Exception as e:
             logging.error(f"Error generating betting insights: {str(e)}")
             return None
@@ -1354,27 +1386,35 @@ class NBADataScraper:
     def get_training_data(self):
         """
         Get all games data up to the training cutoff date (yesterday in Mexico City time).
-        
+
         Returns:
             pd.DataFrame: DataFrame containing all games up to the cutoff date
         """
         try:
             # Read the full dataset
             df = pd.read_csv('nba_games_all.csv')
-            df['Date'] = pd.to_datetime(df['Date'])
-            
+            df['Date'] = pd.to_datetime(df['Date']) # Read as naive
+
+            # Clean games data - IMPORTANT: CLEAN TRAINING DATA TOO
+            logging.info("Cleaning training data...")
+            df = self.clean_games_data(df)
+            if df is None:
+                logging.error("Error cleaning training data, exiting...")
+                return None
+
+
             # Get cutoff date
-            cutoff_date = get_training_cutoff_date()
+            cutoff_date = get_training_cutoff_date() # Get naive cutoff date
             logging.info(f"Filtering data up to cutoff date: {cutoff_date}")
-            
+
             # Filter data
             training_data = df[df['Date'].dt.date <= cutoff_date].copy()
-            
+
             # Validate the filtered data
             if self.validate_season_data(training_data, 2025):  # Current season
                 return training_data
             return None
-            
+
         except Exception as e:
             logging.error(f"Error getting training data: {str(e)}")
             return None
@@ -1385,25 +1425,25 @@ def main():
     """
     try:
         logging.info("Starting NBA data scraping process...")
-        
+
         # Initialize scraper for multiple seasons (2021-2025)
         scraper = NBADataScraper(start_season=2021, end_season=2025)
-        
+
         # First, try to load existing data
         try:
             existing_games = pd.read_csv('nba_games_all.csv')
-            existing_games['Date'] = pd.to_datetime(existing_games['Date'])
+            existing_games['Date'] = pd.to_datetime(existing_games['Date']) # Read as naive
             logging.info(f"Loaded {len(existing_games)} existing games")
         except FileNotFoundError:
             existing_games = None
             logging.info("No existing games data found")
-        
+
         # Determine if we need a full scrape or just an update
         if existing_games is not None:
             last_game_date = existing_games['Date'].max()
-            current_date = get_mexico_city_time()
+            current_date = get_mexico_city_time() # Get naive Mexico City time
             days_since_update = (current_date.date() - last_game_date.date()).days
-            
+
             if days_since_update < 1:
                 logging.info("Data is up to date, no scraping needed")
                 games_df = existing_games
@@ -1422,44 +1462,69 @@ def main():
             logging.info("Scraping all seasons...")
             games_df = scraper.get_all_games()
             needs_retrain = True
-        
+
         if games_df is not None:
             logging.info(f"Successfully scraped {len(games_df)} games")
-            
+
+            # Clean and enhance games data
+            logging.info("Cleaning and enhancing games data...")
+            games_df = scraper.clean_games_data(games_df) # Clean data here!
+            if games_df is None: # Added check for None return
+                logging.error("Error cleaning games data, exiting...")
+                return
+
             # Compute rolling statistics
             logging.info("Computing rolling statistics...")
             games_df = scraper.compute_rolling_stats(games_df, window=5)
-            
+
             # Basic data validation
             logging.info("Validating data...")
             games_per_season = games_df.groupby('Season').size()
             logging.info("\nGames per season:")
             for season, count in games_per_season.items():
                 logging.info(f"Season {season}: {count} games")
-            
+
             duplicates = games_df.duplicated(subset=['Date', 'Away_Team', 'Home_Team']).sum()
             if duplicates > 0:
                 logging.warning(f"Found {duplicates} duplicate games")
                 games_df = games_df.drop_duplicates(subset=['Date', 'Away_Team', 'Home_Team'], keep='first')
             else:
                 logging.info("No duplicate games found")
-            
+
             # Save to CSV
             logging.info("Saving games data...")
             games_df.to_csv('nba_games_all.csv', index=False)
             logging.info("Games data saved successfully")
-            
-            # Check if we need to retrain models
+
+            # Check if we need to retrain
             if needs_retrain:
-                logging.info("New data detected, initiating model retraining...")
+                logging.info("New data detected, initiating model retraining process...")
+
+                #
+                # --- BEGIN NEW CODE (Tuning step) ---
+                #
                 try:
-                    # Get training data up to cutoff date
+                    logging.info("Starting hyperparameter tuning via ModelTuner...")
+                    tuner = ModelTuner()
+                    tuning_success = tuner.run_tuning()
+                    if not tuning_success:
+                        logging.warning("Model Tuning was not successful or no improvement. Proceeding anyway...")
+                    else:
+                        logging.info("Model Tuning completed successfully.")
+                except Exception as e:
+                    logging.error(f"Error while tuning models: {str(e)}")
+                #
+                # --- END NEW CODE (Tuning step) ---
+                #
+
+                # 3) Now do the final training with NBAPredictor, same as existing code:
+                try:
+                    from nba_predictor import NBAPredictor
+                    predictor = NBAPredictor()
+
+                    # (Re)Train new models with training_data
                     training_data = scraper.get_training_data()
                     if training_data is not None:
-                        # Initialize predictor
-                        from nba_predictor import NBAPredictor
-                        predictor = NBAPredictor()
-                        
                         # Load previous model metrics if they exist
                         try:
                             with open('models/metrics_history.json', 'r') as f:
@@ -1467,15 +1532,15 @@ def main():
                             previous_metrics = metrics_history[-1] if metrics_history else None
                         except (FileNotFoundError, json.JSONDecodeError):
                             previous_metrics = None
-                        
+
                         # Train new models
                         new_metrics = predictor.train_models(training_data)
-                        
+
                         # Validate performance
                         if previous_metrics:
                             accuracy_drop = previous_metrics['moneyline_accuracy'] - new_metrics['moneyline_accuracy']
                             rmse_increase = new_metrics['spread_rmse'] - previous_metrics['spread_rmse']
-                            
+
                             if accuracy_drop > 0.02 or rmse_increase > 1.0:
                                 logging.warning("Performance regression detected, keeping previous models")
                                 if os.path.exists('models/backup'):
@@ -1489,15 +1554,15 @@ def main():
                                 for file in os.listdir('models'):
                                     if file.endswith('.joblib'):
                                         shutil.copy(f'models/{file}', f'models/backup/{file}')
-                                
+
                                 # Save new models
                                 predictor.save_models()
-                                
+
                                 # Update metrics history
                                 metrics_history = metrics_history[-2:] + [new_metrics] if metrics_history else [new_metrics]
                                 with open('models/metrics_history.json', 'w') as f:
                                     json.dump(metrics_history, f)
-                                
+
                                 logging.info("Models successfully retrained and saved")
                         else:
                             # First time training, just save the models and metrics
@@ -1505,12 +1570,14 @@ def main():
                             with open('models/metrics_history.json', 'w') as f:
                                 json.dump([new_metrics], f)
                             logging.info("Initial models trained and saved")
-                            
+
+                    else:
+                        logging.warning("No valid training data found, skipping retraining.")
                 except Exception as e:
                     logging.error(f"Error during model retraining: {str(e)}")
             else:
                 logging.info("No new data, skipping model retraining")
-            
+
             # Get current games and betting insights
             logging.info("\nAnalyzing current games...")
             current_games = scraper.get_current_games()
@@ -1526,7 +1593,7 @@ def main():
         else:
             logging.error("Failed to scrape games data")
             return
-        
+
         # Get team stats only if needed
         team_stats = None  # Initialize to None
         try:
@@ -1546,10 +1613,10 @@ def main():
             team_stats = scraper.get_all_team_stats()
             if team_stats is not None:
                 team_stats.to_csv('nba_team_stats_all.csv', index=False)
-        
+
         if team_stats is not None:
             logging.info(f"Successfully processed stats for {len(team_stats)} team-seasons")
-            
+
             # Basic validation
             teams_per_season = team_stats.groupby('Season').size()
             logging.info("\nTeams per season:")
@@ -1557,9 +1624,9 @@ def main():
                 logging.info(f"Season {season}: {count} teams")
                 if count != 30 and season != 2025:  # Current season might be incomplete
                     logging.warning(f"Unexpected number of teams in season {season}: {count} (expected 30)")
-        
+
         logging.info("\nNBA data scraping process completed successfully")
-        
+
     except Exception as e:
         logging.error(f"An error occurred during the scraping process: {str(e)}")
         raise

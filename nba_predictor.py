@@ -279,6 +279,9 @@ class NBAPredictor:
     def predict_games(self, games_df):
         """Generate predictions for games with enhanced ensemble"""
         X = self.prepare_features(games_df)
+        if X.empty: # Handle empty DataFrame case
+             logging.warning("No features to predict on. Returning empty predictions DataFrame.")
+             return pd.DataFrame()
         X_scaled = self.scaler.transform(X)
         
         predictions = pd.DataFrame()
@@ -357,6 +360,18 @@ class NBAPredictor:
     
     def get_best_bets(self, predictions_df, confidence_threshold=0.90, min_value_rating=0.70):
         """Filter and return only the highest confidence bets with enhanced value ratings"""
+
+        # --- NEW CHECK: if empty or missing Moneyline_Confidence, return empty DF
+        if (
+            predictions_df is None 
+            or predictions_df.empty 
+            or 'Moneyline_Confidence' not in predictions_df.columns
+        ):
+            logging.warning("No valid predictions or missing 'Moneyline_Confidence' column. "
+                            "Returning empty best bets DataFrame.")
+            return pd.DataFrame(columns=["Game", "Bet_Type", "Prediction", "Confidence", "Value_Rating"])
+        # ---------------------------------------------------------
+
         best_bets = []
         
         # Moneyline bets with stricter confidence requirements

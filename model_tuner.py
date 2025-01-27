@@ -216,14 +216,19 @@ class ModelTuner:
     def compute_rolling_stats(self, games_df, window=5):
         """Compute rolling statistics for teams"""
         try:
-            df = games_df.copy()
+            if games_df is None or games_df.empty:
+                logging.info(f"No games to compute rolling stats for window={window}. Returning DataFrame as-is.")
+                return games_df
+
+            # Proceed with the existing logic only if games_df has rows
+            games_df = games_df.copy()
             
             # Initialize columns in original dataframe as float64
-            df[f'Home_Point_Diff_Roll{window}'] = 0.0
-            df[f'Away_Point_Diff_Roll{window}'] = 0.0
+            games_df[f'Home_Point_Diff_Roll{window}'] = 0.0
+            games_df[f'Away_Point_Diff_Roll{window}'] = 0.0
             
             # Sort by date and filter out future games for calculation
-            df_hist = df[~df['Is_Future']].sort_values('Date')
+            df_hist = games_df[~games_df['Is_Future']].sort_values('Date')
             
             if len(df_hist) == 0:
                 logging.warning("No historical games found for rolling stats")
@@ -259,9 +264,9 @@ class ModelTuner:
                     latest_diff = float(team_games[f'Point_Diff_Roll{window}'].iloc[-1] if len(team_games) > 0 else 0)
                     
                     # Update home games
-                    df.loc[df['Home_Team'] == team, f'Home_Point_Diff_Roll{window}'] = latest_diff
+                    df.loc[games_df['Home_Team'] == team, f'Home_Point_Diff_Roll{window}'] = latest_diff
                     # Update away games
-                    df.loc[df['Away_Team'] == team, f'Away_Point_Diff_Roll{window}'] = latest_diff
+                    df.loc[games_df['Away_Team'] == team, f'Away_Point_Diff_Roll{window}'] = latest_diff
             
             return df
             
@@ -681,4 +686,4 @@ if __name__ == "__main__":
     if success:
         logging.info("Model tuning completed successfully")
     else:
-        logging.error("Model tuning failed") 
+        logging.error("Model tuning failed")
