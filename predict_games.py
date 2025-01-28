@@ -71,7 +71,7 @@ def main():
             # Add season-based weighting for training
             current_season = 2025
             training_data['season_weight'] = training_data['Season'].apply(
-                lambda x: 1.0 if x == current_season else 0.8 if x == current_season-1 else 0.6
+                lambda x: 1.0 if x == current_season else 0.6 if x == current_season-1 else 0.3 #Update from the old 1.0, 0.8, 0.6
             )
 
             metrics = predictor.train_models(training_data)

@@ -13,6 +13,7 @@ from datetime import datetime
 import pytz
 import time
 import warnings
+import pkg_resources
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -49,6 +50,22 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
+
+# Version compatibility check
+def check_package_versions():
+    sklearn_version = pkg_resources.get_distribution('scikit-learn').version
+    xgboost_version = pkg_resources.get_distribution('xgboost').version
+    logging.info(f"scikit-learn version: {sklearn_version}")
+    logging.info(f"xgboost version: {xgboost_version}")
+    
+    # Check for known compatible versions
+    sklearn_major = int(sklearn_version.split('.')[0])
+    xgboost_major = int(xgboost_version.split('.')[0])
+    
+    if sklearn_major >= 1 and xgboost_major < 1:
+        logging.warning("XGBoost version may be incompatible with scikit-learn. Consider upgrading XGBoost.")
+        return False
+    return True
 
 class ModelTuner:
     """
@@ -347,13 +364,13 @@ class ModelTuner:
             # Early stopping check
             if search.best_score_ < self.config['model_validation']['minimum_accuracy']['moneyline']:
                 logging.warning("Model performance below minimum accuracy threshold")
-                return None
+                return None, None
             
-            return search.best_estimator_
+            return search.best_estimator_, search.best_score_
             
         except Exception as e:
             logging.error(f"Error in random forest tuning: {str(e)}")
-            return None
+            return None, None
     
     def tune_lightgbm(self, X, y):
         """Tune LightGBM model"""
@@ -384,8 +401,17 @@ class ModelTuner:
     def tune_xgboost(self, X, y):
         """Tune XGBoost model"""
         try:
+            # Check version compatibility first
+            if not check_package_versions():
+                logging.warning("Skipping XGBoost tuning due to version incompatibility")
+                return None, None
+            
             param_dist = self.tuning_config['safe_ranges']['xgboost']
-            xgb_model = xgb.XGBClassifier(random_state=42)
+            xgb_model = xgb.XGBClassifier(
+                random_state=42,
+                use_label_encoder=False,  # Avoid warning
+                eval_metric='logloss'  # Specify metric to avoid warning
+            )
             
             search = RandomizedSearchCV(
                 xgb_model,
@@ -594,59 +620,49 @@ class ModelTuner:
             logging.info("Starting automated model tuning...")
             
             # Load and validate data
-            df = self.load_data()
-            if df is None or not self.validate_data(df):
-                return False
-            
-            # Prepare and validate features
-            X, y, feature_names = self.prepare_features(df)
-            if X is None or y is None:
+            X = self.load_data()
+            if X is None:
+                logging.error("Failed to load training data")
                 return False
             
             # Validate features
-            if not self.validate_features(X, feature_names):
+            if not self.validate_features(X):
+                logging.error("Feature validation failed")
                 return False
             
-            # Tune each model
+            # Define models to tune
             models = {
-                'random_forest': self.tune_random_forest,
-                'lightgbm': self.tune_lightgbm,
-                'xgboost': self.tune_xgboost
+                'Random Forest': self.tune_random_forest,
+                'LightGBM': self.tune_lightgbm
             }
             
             for model_type, tune_func in models.items():
                 logging.info(f"\nTuning {model_type}...")
                 
                 # Load previous model score
+                previous_score = None
                 try:
-                    previous_model = joblib.load(f'models/{model_type}_model.joblib')
-                    previous_score = cross_val_score(
-                        previous_model,
-                        X,
-                        y,
-                        cv=self.tuning_config['cross_validation']['folds'],
-                        scoring=self.optimization_metrics['moneyline']
-                    ).mean()
+                    previous_model = joblib.load(f'models/{model_type.lower().replace(" ", "_")}_model.joblib')
+                    if hasattr(previous_model, 'best_score_'):
+                        previous_score = previous_model.best_score_
                 except:
-                    previous_score = 0
+                    logging.info("No previous model found")
                 
                 # Tune model
-                model = tune_func(X, y)
+                model = tune_func(X)
                 if model is None:
+                    logging.error(f"{model_type} tuning failed")
                     continue
                 
                 # Validate performance
-                if not self.validate_model_performance(model, X, y, model_type):
-                    logging.warning(f"Skipping {model_type} due to validation failure")
+                if not self.validate_performance(model, X, previous_score):
+                    logging.error(f"{model_type} performance validation failed")
                     continue
                 
-                # Save if improved
-                if self.validate_performance(model, X, y, previous_score):
-                    self.save_model(model, model_type)
-                else:
-                    logging.info(f"Keeping previous {model_type} model")
+                # Save model
+                self.save_model(model, model_type)
             
-            logging.info("Model tuning completed successfully")
+            logging.info("\nModel tuning completed successfully")
             return True
             
         except Exception as e:
