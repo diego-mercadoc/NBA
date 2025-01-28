@@ -98,55 +98,90 @@ class NBAPredictor:
         # Enhanced feature engineering
         df['Win_Rate_Diff'] = df['Home_Win_Rate'] - df['Away_Win_Rate']
         
-        # Calculate rolling statistics for historical games
+        # Calculate rolling statistics for all games
         for team in df['Home_Team'].unique():
             # Get all games for this team (both home and away)
-            home_games = historical_games[historical_games['Home_Team'] == team][['Date', 'Home_Points', 'Away_Points']].assign(
+            home_games = df[df['Home_Team'] == team][['Date', 'Home_Points', 'Away_Points', 'Is_Future']].assign(
                 Points_Scored=lambda x: x['Home_Points'],
                 Points_Allowed=lambda x: x['Away_Points']
             )
-            away_games = historical_games[historical_games['Away_Team'] == team][['Date', 'Home_Points', 'Away_Points']].assign(
+            away_games = df[df['Away_Team'] == team][['Date', 'Home_Points', 'Away_Points', 'Is_Future']].assign(
                 Points_Scored=lambda x: x['Away_Points'],
                 Points_Allowed=lambda x: x['Home_Points']
             )
             team_games = pd.concat([home_games, away_games]).sort_values('Date')
             
-            # Calculate rolling stats (excluding Date column)
-            team_games['Point_Diff'] = team_games['Points_Scored'] - team_games['Points_Allowed']
+            # Calculate rolling stats using only historical games
+            historical_team_games = team_games[~team_games['Is_Future']].copy()
+            historical_team_games['Point_Diff'] = historical_team_games['Points_Scored'] - historical_team_games['Points_Allowed']
             stats_cols = ['Points_Scored', 'Points_Allowed', 'Point_Diff']
-            rolling_stats = team_games[stats_cols].rolling(window=5, min_periods=1).mean()
-            rolling_stats['Date'] = team_games['Date']  # Add Date back for mapping
+            
+            # Calculate rolling means for each date
+            rolling_stats = pd.DataFrame()
+            for date in team_games['Date'].unique():
+                past_games = historical_team_games[historical_team_games['Date'] < date]
+                if len(past_games) > 0:
+                    last_5_games = past_games.tail(5)
+                    rolling_stats.loc[date, 'Points_Scored'] = last_5_games['Points_Scored'].mean()
+                    rolling_stats.loc[date, 'Points_Allowed'] = last_5_games['Points_Allowed'].mean()
+                    rolling_stats.loc[date, 'Point_Diff'] = last_5_games['Point_Diff'].mean()
             
             # Map back to main DataFrame for home games
             home_mask = df['Home_Team'] == team
             df.loc[home_mask, 'Home_Points_Scored_Roll5'] = df.loc[home_mask, 'Date'].map(
-                rolling_stats.set_index('Date')['Points_Scored']
+                rolling_stats['Points_Scored']
             )
             df.loc[home_mask, 'Home_Points_Allowed_Roll5'] = df.loc[home_mask, 'Date'].map(
-                rolling_stats.set_index('Date')['Points_Allowed']
+                rolling_stats['Points_Allowed']
             )
             df.loc[home_mask, 'Home_Point_Diff_Roll5'] = df.loc[home_mask, 'Date'].map(
-                rolling_stats.set_index('Date')['Point_Diff']
+                rolling_stats['Point_Diff']
             )
             
             # Map back to main DataFrame for away games
             away_mask = df['Away_Team'] == team
             df.loc[away_mask, 'Away_Points_Scored_Roll5'] = df.loc[away_mask, 'Date'].map(
-                rolling_stats.set_index('Date')['Points_Scored']
+                rolling_stats['Points_Scored']
             )
             df.loc[away_mask, 'Away_Points_Allowed_Roll5'] = df.loc[away_mask, 'Date'].map(
-                rolling_stats.set_index('Date')['Points_Allowed']
+                rolling_stats['Points_Allowed']
             )
             df.loc[away_mask, 'Away_Point_Diff_Roll5'] = df.loc[away_mask, 'Date'].map(
-                rolling_stats.set_index('Date')['Point_Diff']
+                rolling_stats['Point_Diff']
             )
         
-        # Fill NaN values in rolling stats with 0
+        # Fill NaN values in rolling stats with team averages from historical games
         rolling_cols = [
             'Home_Points_Scored_Roll5', 'Home_Points_Allowed_Roll5', 'Home_Point_Diff_Roll5',
             'Away_Points_Scored_Roll5', 'Away_Points_Allowed_Roll5', 'Away_Point_Diff_Roll5'
         ]
-        df[rolling_cols] = df[rolling_cols].fillna(0)
+        for col in rolling_cols:
+            team_type = 'Home' if 'Home_' in col else 'Away'
+            stat_type = col.split('_')[-2]  # Points_Scored, Points_Allowed, or Point_Diff
+            
+            # Calculate team averages from historical games
+            team_averages = {}
+            for team in df[f'{team_type}_Team'].unique():
+                team_mask = (historical_games[f'{team_type}_Team'] == team)
+                if stat_type == 'Points_Scored':
+                    avg = historical_games.loc[team_mask, f'{team_type}_Points'].mean()
+                elif stat_type == 'Points_Allowed':
+                    opp_type = 'Away' if team_type == 'Home' else 'Home'
+                    avg = historical_games.loc[team_mask, f'{opp_type}_Points'].mean()
+                else:  # Point_Diff
+                    if team_type == 'Home':
+                        avg = historical_games.loc[team_mask, 'Home_Points'].mean() - historical_games.loc[team_mask, 'Away_Points'].mean()
+                    else:
+                        avg = historical_games.loc[team_mask, 'Away_Points'].mean() - historical_games.loc[team_mask, 'Home_Points'].mean()
+                team_averages[team] = avg
+            
+            # Fill NaN values with team averages
+            mask = df[col].isna()
+            df.loc[mask, col] = df.loc[mask, f'{team_type}_Team'].map(team_averages)
+        
+        # Fill any remaining NaN values with global averages
+        for col in rolling_cols:
+            df[col] = df[col].fillna(df[col].mean())
         
         # Calculate point differential ratio safely
         df['Point_Diff_Ratio'] = df.apply(

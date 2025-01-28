@@ -650,14 +650,20 @@ class NBADataScraper:
             # Try to find the advanced stats table
             advanced_stats_table = None
             for i, df in enumerate(dfs):
+                # Check if required stats are in the columns
                 if isinstance(df.columns, pd.MultiIndex):
-                    # For multi-index columns, check second level if it exists
-                    col_names = [col[1] if isinstance(col, tuple) else col for col in df.columns]
+                    # For multi-index columns, check all levels
+                    all_cols = []
+                    for col in df.columns:
+                        if isinstance(col, tuple):
+                            all_cols.extend(col)
+                        else:
+                            all_cols.append(col)
                 else:
-                    col_names = df.columns
+                    all_cols = df.columns
 
                 # Check if this table has the required stats
-                if any(stat in col_names for stat in ['ORtg', 'DRtg', 'Pace']):
+                if any(stat in str(col) for col in all_cols for stat in ['ORtg', 'DRtg', 'Pace']):
                     logging.info(f"Found advanced stats in table {i}")
                     advanced_stats_table = df.copy()  # Create a copy to avoid modifying original
                     break
@@ -671,12 +677,16 @@ class NBADataScraper:
                     new_cols = []
                     for col in df.columns:
                         if isinstance(col, tuple):
-                            if 'Four Factors' in str(col[0]):
-                                new_cols.append(f"{col[0]}_{col[1]}")
+                            # Join all levels of the multi-index
+                            col_name = '_'.join(str(level) for level in col if pd.notna(level))
+                            if 'Four Factors' in col_name:
+                                # Keep the Four Factors prefix
+                                new_cols.append(col_name)
                             else:
-                                new_cols.append(col[1])
+                                # Use only the last level for other stats
+                                new_cols.append(str(col[-1]))
                         else:
-                            new_cols.append(col)
+                            new_cols.append(str(col))
                     df.columns = new_cols
 
                 # Debug logging
@@ -691,31 +701,39 @@ class NBADataScraper:
                     'DRtg': 'DRtg',
                     'Pace': 'Pace',
                     'SRS': 'SRS',
-                    'Offense Four Factors_eFG%': 'eFG_Pct',
-                    'Offense Four Factors_TOV%': 'TOV_Pct',
-                    'Offense Four Factors_ORB%': 'ORB_Pct',
-                    'Offense Four Factors_FT/FGA': 'FT_Rate'
+                    'Four Factors_Offense_eFG%': 'eFG_Pct',
+                    'Four Factors_Offense_TOV%': 'TOV_Pct',
+                    'Four Factors_Offense_ORB%': 'ORB_Pct',
+                    'Four Factors_Offense_FT/FGA': 'FT_Rate'
                 }
 
-                # Create a reverse mapping to find variations of column names
-                reverse_map = {}
-                for target, mapped in col_map.items():
-                    reverse_map[mapped] = [target]
-                    # Add variations for the Four Factors stats
-                    if 'Four Factors' in target:
-                        base_name = target.split('_')[1]
-                        reverse_map[mapped].extend([
-                            base_name,
-                            f"Team_{base_name}",
-                            f"Advanced_{base_name}"
+                # Create variations of column names
+                variations = {}
+                for orig, mapped in col_map.items():
+                    variations[mapped] = [orig]
+                    # Add variations without spaces and with different separators
+                    clean_name = orig.replace(' ', '')
+                    variations[mapped].extend([
+                        clean_name,
+                        orig.replace(' ', '_'),
+                        orig.replace('Four Factors_', ''),
+                        orig.replace('Four Factors_Offense_', ''),
+                        orig.split('_')[-1] if '_' in orig else orig
+                    ])
+                    # Add variations for basic stats
+                    if mapped in ['ORtg', 'DRtg', 'Pace', 'SRS']:
+                        variations[mapped].extend([
+                            f"Team_{orig}",
+                            f"Advanced_{orig}",
+                            f"Misc_{orig}"
                         ])
 
                 # Find the actual column names in the DataFrame
                 final_col_map = {}
-                for mapped, variations in reverse_map.items():
-                    for var in variations:
-                        if var in df.columns:
-                            final_col_map[var] = mapped
+                for mapped, possible_names in variations.items():
+                    for name in possible_names:
+                        if name in df.columns:
+                            final_col_map[name] = mapped
                             break
 
                 # Rename columns using the found mappings
@@ -748,15 +766,14 @@ class NBADataScraper:
                 for col in numeric_cols:
                     df[col] = pd.to_numeric(df[col], errors='coerce')
 
-                logging.info(f"Successfully scraped team stats for season {season}")
                 return df
 
-            logging.warning(f"Could not find advanced stats table at {url}")
-            return None
+            else:
+                logging.error("Could not find advanced stats table")
+                return None
 
         except Exception as e:
             logging.error(f"Error scraping team stats for {season}: {str(e)}")
-            logging.error(f"Error details: {str(e.__class__.__name__)}")
             return None
 
     def add_quarter_stats(self, df, season):
