@@ -101,20 +101,19 @@ class NBAPredictor:
         # Calculate rolling statistics for all games
         for team in df['Home_Team'].unique():
             # Get all games for this team (both home and away)
-            home_games = df[df['Home_Team'] == team][['Date', 'Home_Points', 'Away_Points', 'Is_Future']].assign(
-                Points_Scored=lambda x: x['Home_Points'],
-                Points_Allowed=lambda x: x['Away_Points']
-            )
-            away_games = df[df['Away_Team'] == team][['Date', 'Home_Points', 'Away_Points', 'Is_Future']].assign(
-                Points_Scored=lambda x: x['Away_Points'],
-                Points_Allowed=lambda x: x['Home_Points']
-            )
+            home_games = df[df['Home_Team'] == team][['Date', 'Home_Points', 'Away_Points', 'Is_Future']].copy()
+            home_games['Points_Scored'] = home_games['Home_Points']
+            home_games['Points_Allowed'] = home_games['Away_Points']
+            
+            away_games = df[df['Away_Team'] == team][['Date', 'Home_Points', 'Away_Points', 'Is_Future']].copy()
+            away_games['Points_Scored'] = away_games['Away_Points']
+            away_games['Points_Allowed'] = away_games['Home_Points']
+            
             team_games = pd.concat([home_games, away_games]).sort_values('Date')
             
             # Calculate rolling stats using only historical games
             historical_team_games = team_games[~team_games['Is_Future']].copy()
             historical_team_games['Point_Diff'] = historical_team_games['Points_Scored'] - historical_team_games['Points_Allowed']
-            stats_cols = ['Points_Scored', 'Points_Allowed', 'Point_Diff']
             
             # Calculate rolling means for each date
             rolling_stats = pd.DataFrame()
