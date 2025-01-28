@@ -1,49 +1,49 @@
 Home_Team,Away_Team,Date,Home_Win_Prob,Away_Win_Prob,Moneyline_Pick,Predicted_Spread,Predicted_Total,First_Half_Total,First_Half_Spread,Avg_Quarter_Points,First_Quarter_Total,First_Quarter_Spread,Moneyline_Confidence,Formatted_Predictions,Game,Value_Rating
-Philadelphia 76ers,Los Angeles Lakers,2025-01-28,0.17219461593066102,0.8278053763083175,0,2.9051468,230.70267734024884,119.9653922169294,1.3944705,57.67566933506221,55.36864256165972,1.3073161,0.8278053763083175,"Game: Los Angeles Lakers @ Philadelphia 76ers
-Moneyline: Los Angeles Lakers ML (82.8% confidence)
-Win Probabilities: Philadelphia 76ers: 17.2%, Los Angeles Lakers: 82.8%
+Philadelphia 76ers,Los Angeles Lakers,2025-01-28,0.1755918866076078,0.8244081105984246,0,8.022887,228.43976268356266,118.78867659545259,3.8509858,57.109940670890666,54.82554304405504,3.610299,0.8244081105984246,"Game: Los Angeles Lakers @ Philadelphia 76ers
+Moneyline: Los Angeles Lakers ML (82.4% confidence)
+Win Probabilities: Philadelphia 76ers: 17.6%, Los Angeles Lakers: 82.4%
 Full Game:
-  - Spread: Philadelphia 76ers +2.9
-  - Total: 230.7
+  - Spread: Philadelphia 76ers +8.0
+  - Total: 228.4
 First Half:
-  - Spread: Philadelphia 76ers +1.4
-  - Total: 120.0
+  - Spread: Philadelphia 76ers +3.9
+  - Total: 118.8
 First Quarter:
-  - Spread: Philadelphia 76ers +1.3
-  - Total: 55.4",Los Angeles Lakers @ Philadelphia 76ers,0.596989923426829
-Golden State Warriors,Utah Jazz,2025-01-28,0.1438271991918624,0.8561728098109226,0,5.874354,220.95889783724363,114.89862687536669,2.8196898,55.23972445931091,53.03013548093847,2.643459,0.8561728098109226,"Game: Utah Jazz @ Golden State Warriors
-Moneyline: Utah Jazz ML (85.6% confidence)
-Win Probabilities: Golden State Warriors: 14.4%, Utah Jazz: 85.6%
+  - Spread: Philadelphia 76ers +3.6
+  - Total: 54.8",Los Angeles Lakers @ Philadelphia 76ers,0.5883782930804607
+Golden State Warriors,Utah Jazz,2025-01-28,0.14857418911234768,0.8514258037475125,0,1.4018946,227.99199406706083,118.55583691487163,0.6729094,56.99799851676521,54.7180785760946,0.6308525,0.8514258037475125,"Game: Utah Jazz @ Golden State Warriors
+Moneyline: Utah Jazz ML (85.1% confidence)
+Win Probabilities: Golden State Warriors: 14.9%, Utah Jazz: 85.1%
 Full Game:
-  - Spread: Golden State Warriors +5.9
-  - Total: 221.0
+  - Spread: Golden State Warriors +1.4
+  - Total: 228.0
 First Half:
-  - Spread: Golden State Warriors +2.8
-  - Total: 114.9
+  - Spread: Golden State Warriors +0.7
+  - Total: 118.6
 First Quarter:
-  - Spread: Golden State Warriors +2.6
-  - Total: 53.0",Utah Jazz @ Golden State Warriors,0.6708800373002181
-Atlanta Hawks,Houston Rockets,2025-01-28,0.16821458118609992,0.8317854110528785,0,0.60279083,225.64613544462082,117.33599043120283,0.2893396,56.411533861155206,54.155072506709,0.27125588,0.8317854110528785,"Game: Houston Rockets @ Atlanta Hawks
-Moneyline: Houston Rockets ML (83.2% confidence)
-Win Probabilities: Atlanta Hawks: 16.8%, Houston Rockets: 83.2%
+  - Spread: Golden State Warriors +0.6
+  - Total: 54.7",Utah Jazz @ Golden State Warriors,0.6582686009965805
+Atlanta Hawks,Houston Rockets,2025-01-28,0.1628217068500805,0.8371782860097797,0,9.864905,228.56300041487586,118.85276021573544,4.7351546,57.140750103718965,54.85512009957021,4.439207,0.8371782860097797,"Game: Houston Rockets @ Atlanta Hawks
+Moneyline: Houston Rockets ML (83.7% confidence)
+Win Probabilities: Atlanta Hawks: 16.3%, Houston Rockets: 83.7%
 Full Game:
-  - Spread: Atlanta Hawks +0.6
-  - Total: 225.6
+  - Spread: Atlanta Hawks +9.9
+  - Total: 228.6
 First Half:
-  - Spread: Atlanta Hawks +0.3
-  - Total: 117.3
+  - Spread: Atlanta Hawks +4.7
+  - Total: 118.9
 First Quarter:
-  - Spread: Atlanta Hawks +0.3
-  - Total: 54.2",Houston Rockets @ Atlanta Hawks,0.607143389031782
-Portland Trail Blazers,Milwaukee Bucks,2025-01-28,0.17555142219289374,0.8244485700460847,0,3.0011137,221.23472487765076,115.0420569363784,1.4405345,55.30868121941269,53.09633397063618,1.3505011,0.8244485700460847,"Game: Milwaukee Bucks @ Portland Trail Blazers
-Moneyline: Milwaukee Bucks ML (82.4% confidence)
-Win Probabilities: Portland Trail Blazers: 17.6%, Milwaukee Bucks: 82.4%
+  - Spread: Atlanta Hawks +4.4
+  - Total: 54.9",Houston Rockets @ Atlanta Hawks,0.621012353610369
+Portland Trail Blazers,Milwaukee Bucks,2025-01-28,0.17385386994647187,0.8261461272595604,0,9.467845,227.61648392833064,118.36057164273194,4.5445657,56.90412098208266,54.62795614279935,4.26053,0.8261461272595604,"Game: Milwaukee Bucks @ Portland Trail Blazers
+Moneyline: Milwaukee Bucks ML (82.6% confidence)
+Win Probabilities: Portland Trail Blazers: 17.4%, Milwaukee Bucks: 82.6%
 Full Game:
-  - Spread: Portland Trail Blazers +3.0
-  - Total: 221.2
+  - Spread: Portland Trail Blazers +9.5
+  - Total: 227.6
 First Half:
-  - Spread: Portland Trail Blazers +1.4
-  - Total: 115.0
+  - Spread: Portland Trail Blazers +4.5
+  - Total: 118.4
 First Quarter:
-  - Spread: Portland Trail Blazers +1.4
-  - Total: 53.1",Milwaukee Bucks @ Portland Trail Blazers,0.5884805582200009
+  - Spread: Portland Trail Blazers +4.3
+  - Total: 54.6",Milwaukee Bucks @ Portland Trail Blazers,0.5927775944426652
