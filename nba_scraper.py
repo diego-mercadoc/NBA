@@ -988,6 +988,28 @@ class NBADataScraper:
                games_df['Home_Form'] = games_df['Home_Form'].apply(self.remove_emojis) # ADDED
                games_df['Away_Form'] = games_df['Away_Form'].apply(self.remove_emojis) # ADDED
 
+            # Sort by date so subsequent (future) rows come after the last played game
+            games_df.sort_values('Date', ascending=True, inplace=True)
+
+            roll_cols = [
+                f'Home_Points_Scored_Roll{window}',
+                f'Home_Points_Allowed_Roll{window}',
+                f'Home_Point_Diff_Roll{window}',
+                f'Away_Points_Scored_Roll{window}',
+                f'Away_Points_Allowed_Roll{window}',
+                f'Away_Point_Diff_Roll{window}'
+            ]
+
+            # Forward-fill for each unique Home_Team
+            for home_team in games_df['Home_Team'].unique():
+                home_mask = games_df['Home_Team'] == home_team
+                games_df.loc[home_mask, roll_cols] = games_df.loc[home_mask, roll_cols].ffill()
+
+            # Forward-fill for each unique Away_Team
+            for away_team in games_df['Away_Team'].unique():
+                away_mask = games_df['Away_Team'] == away_team
+                games_df.loc[away_mask, roll_cols] = games_df.loc[away_mask, roll_cols].ffill()
+
             return games_df
         except Exception as e:
             logging.error(f"Error in compute_rolling_stats: {str(e)}")
