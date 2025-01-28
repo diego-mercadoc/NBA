@@ -86,14 +86,10 @@ class NBAPredictor:
         historical_games['Home_Win'] = (historical_games['Home_Points'] > historical_games['Away_Points']).astype(int)
         historical_games['Away_Win'] = (historical_games['Away_Points'] > historical_games['Home_Points']).astype(int)
         
-        # Calculate win rates with exponential weighting using historical games only
+        # Calculate win rates using historical games only
         for team_type in ['Home', 'Away']:
-            if team_type == 'Home':
-                team_stats = historical_games.groupby(f'{team_type}_Team')['Home_Win'].agg(['count', 'mean'])
-                df[f'{team_type}_Win_Rate'] = df[f'{team_type}_Team'].map(team_stats['mean'])
-            else:
-                team_stats = historical_games.groupby(f'{team_type}_Team')['Home_Win'].agg(['count', 'mean'])
-                df[f'{team_type}_Win_Rate'] = df[f'{team_type}_Team'].map(1 - team_stats['mean'])
+            team_stats = historical_games.groupby(f'{team_type}_Team')['Home_Win'].agg(['count', 'mean'])
+            df[f'{team_type}_Win_Rate'] = df[f'{team_type}_Team'].map(team_stats['mean'])
         
         # Fill NaN values in win rates with 0.5 (neutral)
         df['Home_Win_Rate'] = df['Home_Win_Rate'].fillna(0.5)
@@ -102,37 +98,93 @@ class NBAPredictor:
         # Enhanced feature engineering
         df['Win_Rate_Diff'] = df['Home_Win_Rate'] - df['Away_Win_Rate']
         
-        # Handle potential division by zero or NaN
-        df['Away_Point_Diff_Roll5'] = df['Away_Point_Diff_Roll5'].fillna(0)
-        df['Home_Point_Diff_Roll5'] = df['Home_Point_Diff_Roll5'].fillna(0)
+        # Calculate rolling statistics for historical games
+        for team in df['Home_Team'].unique():
+            # Get all games for this team (both home and away)
+            team_games = pd.concat([
+                historical_games[historical_games['Home_Team'] == team][['Date', 'Home_Points', 'Away_Points']].assign(
+                    Points_Scored=lambda x: x['Home_Points'],
+                    Points_Allowed=lambda x: x['Away_Points']
+                ),
+                historical_games[historical_games['Away_Team'] == team][['Date', 'Home_Points', 'Away_Points']].assign(
+                    Points_Scored=lambda x: x['Away_Points'],
+                    Points_Allowed=lambda x: x['Home_Points']
+                )
+            ]).sort_values('Date')
+            
+            # Calculate rolling stats
+            team_games['Point_Diff'] = team_games['Points_Scored'] - team_games['Points_Allowed']
+            rolling_stats = team_games.rolling(window=5, min_periods=1).mean()
+            
+            # Map back to main DataFrame for home games
+            home_mask = df['Home_Team'] == team
+            df.loc[home_mask, 'Home_Points_Scored_Roll5'] = df.loc[home_mask, 'Date'].map(
+                rolling_stats.set_index('Date')['Points_Scored']
+            )
+            df.loc[home_mask, 'Home_Points_Allowed_Roll5'] = df.loc[home_mask, 'Date'].map(
+                rolling_stats.set_index('Date')['Points_Allowed']
+            )
+            df.loc[home_mask, 'Home_Point_Diff_Roll5'] = df.loc[home_mask, 'Date'].map(
+                rolling_stats.set_index('Date')['Point_Diff']
+            )
+            
+            # Map back to main DataFrame for away games
+            away_mask = df['Away_Team'] == team
+            df.loc[away_mask, 'Away_Points_Scored_Roll5'] = df.loc[away_mask, 'Date'].map(
+                rolling_stats.set_index('Date')['Points_Scored']
+            )
+            df.loc[away_mask, 'Away_Points_Allowed_Roll5'] = df.loc[away_mask, 'Date'].map(
+                rolling_stats.set_index('Date')['Points_Allowed']
+            )
+            df.loc[away_mask, 'Away_Point_Diff_Roll5'] = df.loc[away_mask, 'Date'].map(
+                rolling_stats.set_index('Date')['Point_Diff']
+            )
+        
+        # Fill NaN values in rolling stats with 0
+        rolling_cols = [
+            'Home_Points_Scored_Roll5', 'Home_Points_Allowed_Roll5', 'Home_Point_Diff_Roll5',
+            'Away_Points_Scored_Roll5', 'Away_Points_Allowed_Roll5', 'Away_Point_Diff_Roll5'
+        ]
+        df[rolling_cols] = df[rolling_cols].fillna(0)
+        
+        # Calculate point differential ratio safely
         df['Point_Diff_Ratio'] = df.apply(
-            lambda x: x['Home_Point_Diff_Roll5'] / (x['Away_Point_Diff_Roll5'] + 1e-6)
-            if x['Away_Point_Diff_Roll5'] != 0
-            else x['Home_Point_Diff_Roll5'],
+            lambda x: x['Home_Point_Diff_Roll5'] / (abs(x['Away_Point_Diff_Roll5']) + 1e-6)
+            if x['Home_Point_Diff_Roll5'] != 0 or x['Away_Point_Diff_Roll5'] != 0
+            else 1.0,
             axis=1
         )
         
         # Fill NaN values in rest days with median from historical games
-        df['Home_Rest_Days'] = df['Home_Rest_Days'].fillna(historical_games['Home_Rest_Days'].median())
-        df['Away_Rest_Days'] = df['Away_Rest_Days'].fillna(historical_games['Away_Rest_Days'].median())
+        for col in ['Home_Rest_Days', 'Away_Rest_Days']:
+            if col in df.columns:
+                median_rest = historical_games[col].median()
+                df[col] = df[col].fillna(median_rest if not pd.isna(median_rest) else 1)
         df['Rest_Advantage'] = df['Home_Rest_Days'] - df['Away_Rest_Days']
         
         # Fill NaN values in streaks with 0
-        df['Home_Streak'] = df['Home_Streak'].fillna(0)
-        df['Away_Streak'] = df['Away_Streak'].fillna(0)
+        for col in ['Home_Streak', 'Away_Streak']:
+            if col in df.columns:
+                df[col] = df[col].fillna(0)
         df['Streak_Advantage'] = df['Home_Streak'] - df['Away_Streak']
         
         # Calculate form ratio with NaN handling
         df['Recent_Form_Ratio'] = df.apply(
-            lambda x: (x['Home_Point_Diff_Roll5'] + 1e-6) / (x['Away_Point_Diff_Roll5'] + 1e-6)
-            if x['Away_Point_Diff_Roll5'] != 0
-            else x['Home_Point_Diff_Roll5'],
+            lambda x: (x['Home_Point_Diff_Roll5'] + 1e-6) / (abs(x['Away_Point_Diff_Roll5']) + 1e-6)
+            if x['Home_Point_Diff_Roll5'] != 0 or x['Away_Point_Diff_Roll5'] != 0
+            else 1.0,
             axis=1
         )
         
         # Interaction features
         df['Win_Rate_Rest_Interaction'] = df['Win_Rate_Diff'] * df['Rest_Advantage']
         df['Streak_Form_Interaction'] = df['Streak_Advantage'] * df['Recent_Form_Ratio']
+        
+        # Ensure all required feature columns exist
+        for col in self.feature_columns:
+            if col not in df.columns:
+                logging.warning(f"Missing feature column: {col}, filling with zeros")
+                df[col] = 0
         
         # Fill remaining NaN values with 0
         feature_cols = self.feature_columns + [
@@ -143,14 +195,16 @@ class NBAPredictor:
         X = df[feature_cols].fillna(0)
         
         # Add debug logging
-        logging.info(f"Feature statistics for {len(df)} games:")
+        logging.info(f"\nFeature statistics for {len(df)} games:")
         for col in feature_cols:
             stats = X[col].describe()
-            logging.info(f"{col}:")
+            logging.info(f"\n{col}:")
             logging.info(f"  Mean: {stats['mean']:.3f}")
             logging.info(f"  Std: {stats['std']:.3f}")
             logging.info(f"  Min: {stats['min']:.3f}")
             logging.info(f"  Max: {stats['max']:.3f}")
+            non_zero = (X[col] != 0).sum()
+            logging.info(f"  Non-zero values: {non_zero} ({(non_zero/len(X))*100:.1f}%)")
         
         return X
     
