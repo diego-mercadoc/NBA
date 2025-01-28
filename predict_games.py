@@ -15,11 +15,7 @@ def main():
         # Configure logging
         logging.basicConfig(
             level=logging.INFO,
-            format='%(asctime)s - %(levelname)s - %(message)s',
-            handlers=[
-                logging.StreamHandler(),  # Add console handler
-                logging.FileHandler('nba_predictions.log')  # Also log to file
-            ]
+            format='%(asctime)s - %(levelname)s - %(message)s'
         )
 
         # Ensure models directory exists
@@ -45,7 +41,6 @@ def main():
             logging.error("Error cleaning games data, exiting...")
             return
         games_df = cleaned_df
-
 
         # Filter out data before October 18, 2022
         cutoff_date = pd.Timestamp('2022-10-18') # Naive cutoff_date
@@ -90,33 +85,37 @@ def main():
         today_games = scraper.get_current_games()
 
         if today_games is not None and not today_games.empty:
-            if today_games is None or today_games.empty: # ADD THIS CHECK
-                logging.info("No games to predict. Exiting prediction routine.")
-                return  # Exit function if no games to predict
-
             logging.info(f"\nGenerating predictions for {len(today_games)} games...")
 
             # Clean today's games data - IMPORTANT: CLEAN CURRENT GAMES TOO
             logging.info("Cleaning today's games data...")
             if today_games is not None:
                 today_games = scraper.clean_games_data(today_games, preserve_future_games=True)
-            if today_games is None: # Added check, although get_current_games should not return None in normal cases
-                logging.warning("Could not clean today's games data, proceeding without cleaning...")
-            else:
-                # Compute rolling stats for today's games
-                logging.info("Computing rolling statistics for today's games...")
-                today_games = scraper.compute_rolling_stats(today_games, window=5)
-
-                # Add recent form metrics
-                logging.info("Computing rolling statistics for recent form (window=3)...")
-                today_games = scraper.compute_rolling_stats(today_games, window=3)  # Shorter window for recent form
-
+            if today_games is None:
+                logging.warning("Could not clean today's games data, exiting...")
+                return
+            
+            # Store today's games indices before concatenation
+            today_games_index = today_games.index
+            
+            # Combine historical and today's games for proper rolling stats calculation
+            logging.info("Combining historical and today's games for rolling statistics...")
+            combined_df = pd.concat([games_df, today_games], ignore_index=True)
+            
+            # Compute rolling stats on the combined dataset
+            logging.info("Computing rolling statistics on combined dataset...")
+            combined_df = scraper.compute_rolling_stats(combined_df, window=5)
+            combined_df = scraper.compute_rolling_stats(combined_df, window=3)  # Shorter window for recent form
+            
+            # Extract back only today's games with proper rolling stats
+            today_games = combined_df.tail(len(today_games)).copy()
+            
             logging.info("Making predictions...")
             predictions = predictor.predict_games(today_games)
 
             if predictions.empty:
                 logging.info("No predictions returned (empty DataFrame). Skipping best_bets calculation.")
-                return  # or just skip get_best_bets if you'd rather continue gracefully
+                return
 
             # Get best bets with stricter criteria
             best_bets = predictor.get_best_bets(
