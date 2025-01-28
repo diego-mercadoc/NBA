@@ -206,8 +206,7 @@ def main():
         else:
             logging.info("No games scheduled for today")
         logging.info("\nTeam stats are up to date")
-        logging.info(f"Successfully processed stats for {len(team_stats)} team-seasons")
-        logging.info("\nNBA data scraping process completed successfully")
+        logging.info("NBA data scraping process complete")
         
     except Exception as e:
         logging.error(f"An error occurred: {str(e)}")

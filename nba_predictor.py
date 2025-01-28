@@ -101,20 +101,21 @@ class NBAPredictor:
         # Calculate rolling statistics for historical games
         for team in df['Home_Team'].unique():
             # Get all games for this team (both home and away)
-            team_games = pd.concat([
-                historical_games[historical_games['Home_Team'] == team][['Date', 'Home_Points', 'Away_Points']].assign(
-                    Points_Scored=lambda x: x['Home_Points'],
-                    Points_Allowed=lambda x: x['Away_Points']
-                ),
-                historical_games[historical_games['Away_Team'] == team][['Date', 'Home_Points', 'Away_Points']].assign(
-                    Points_Scored=lambda x: x['Away_Points'],
-                    Points_Allowed=lambda x: x['Home_Points']
-                )
-            ]).sort_values('Date')
+            home_games = historical_games[historical_games['Home_Team'] == team][['Date', 'Home_Points', 'Away_Points']].assign(
+                Points_Scored=lambda x: x['Home_Points'],
+                Points_Allowed=lambda x: x['Away_Points']
+            )
+            away_games = historical_games[historical_games['Away_Team'] == team][['Date', 'Home_Points', 'Away_Points']].assign(
+                Points_Scored=lambda x: x['Away_Points'],
+                Points_Allowed=lambda x: x['Home_Points']
+            )
+            team_games = pd.concat([home_games, away_games]).sort_values('Date')
             
-            # Calculate rolling stats
+            # Calculate rolling stats (excluding Date column)
             team_games['Point_Diff'] = team_games['Points_Scored'] - team_games['Points_Allowed']
-            rolling_stats = team_games.rolling(window=5, min_periods=1).mean()
+            stats_cols = ['Points_Scored', 'Points_Allowed', 'Point_Diff']
+            rolling_stats = team_games[stats_cols].rolling(window=5, min_periods=1).mean()
+            rolling_stats['Date'] = team_games['Date']  # Add Date back for mapping
             
             # Map back to main DataFrame for home games
             home_mask = df['Home_Team'] == team
