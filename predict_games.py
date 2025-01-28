@@ -15,7 +15,11 @@ def main():
         # Configure logging
         logging.basicConfig(
             level=logging.INFO,
-            format='%(asctime)s - %(levelname)s - %(message)s'
+            format='%(asctime)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.StreamHandler(),  # Add console handler
+                logging.FileHandler('nba_predictions.log')  # Also log to file
+            ]
         )
 
         # Ensure models directory exists

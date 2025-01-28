@@ -12,6 +12,33 @@ import os
 from datetime import datetime
 import pytz
 import time
+import warnings
+
+warnings.filterwarnings("ignore", category=UserWarning)
+
+# Filter specifically for LightGBM warnings and the exact message
+warnings.filterwarnings("ignore",
+                        message="No further splits with positive gain, best gain: -inf",
+                        module='lightgbm') # Or you might need to check the exact module
+
+# Filter specifically for LightGBM warnings and the exact message
+warnings.filterwarnings("ignore",
+                        message="No further splits with positive gain, best gain: -inf",
+                        module='lightgbm', category=UserWarning) # Or you might need to check the exact module
+
+# Filter specifically for LightGBM warnings and the exact message
+warnings.filterwarnings("ignore",
+                        message="FutureWarning: 'force_all_finite' was renamed to 'ensure_all_finite' in 1.6 and will be removed in 1.8.",
+                        module='lightgbm', category=UserWarning) # Or you might need to check the exact module
+
+warnings.filterwarnings("ignore", category=FutureWarning, module='sklearn') # ADD THIS LINE
+
+warnings.filterwarnings("ignore", category=FutureWarning)
+
+# Filter specifically for LightGBM warnings and the exact message
+warnings.filterwarnings("ignore",
+                        message="FutureWarning: 'force_all_finite' was renamed to 'ensure_all_finite' in 1.6 and will be removed in 1.8.") # Or you might need to check the exact module
+
 
 # Configure logging
 logging.basicConfig(
@@ -301,7 +328,7 @@ class ModelTuner:
                 cv=5,
                 scoring='accuracy',
                 n_jobs=-1,
-                verbose=2,
+                verbose=0,
                 random_state=42
             )
             
@@ -332,7 +359,7 @@ class ModelTuner:
         """Tune LightGBM model"""
         try:
             param_dist = self.tuning_config['safe_ranges']['lightgbm']
-            lgbm = lgb.LGBMClassifier(random_state=42)
+            lgbm = lgb.LGBMClassifier(random_state=42, verbose=-1)
             
             search = RandomizedSearchCV(
                 lgbm,
@@ -341,7 +368,8 @@ class ModelTuner:
                 cv=self.tuning_config['cross_validation']['folds'],
                 scoring=self.optimization_metrics['moneyline'],
                 n_jobs=-1,
-                random_state=42
+                random_state=42,
+                verbose=0
             )
             
             search.fit(X, y)
@@ -366,7 +394,8 @@ class ModelTuner:
                 cv=self.tuning_config['cross_validation']['folds'],
                 scoring=self.optimization_metrics['moneyline'],
                 n_jobs=-1,
-                random_state=42
+                random_state=42,
+                verbose=0
             )
             
             search.fit(X, y)

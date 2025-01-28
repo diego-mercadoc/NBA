@@ -32,7 +32,10 @@ class NBAPredictor:
             'Home_Points_Scored_Roll5', 'Home_Points_Allowed_Roll5', 'Home_Point_Diff_Roll5',
             'Away_Points_Scored_Roll5', 'Away_Points_Allowed_Roll5', 'Away_Point_Diff_Roll5',
             'Home_Streak', 'Away_Streak', 'Home_Rest_Days', 'Away_Rest_Days',
-            'Home_Win_Rate', 'Away_Win_Rate'
+            'Home_Win_Rate', 'Away_Win_Rate',
+            'Win_Rate_Diff', 'Point_Diff_Ratio', 'Rest_Advantage',
+            'Streak_Advantage', 'Recent_Form_Ratio', 'Win_Rate_Rest_Interaction',
+            'Streak_Form_Interaction'
         ]
         
         # Initialize base models for ensemble with optimized parameters
@@ -229,11 +232,7 @@ class NBAPredictor:
                 df[col] = 0
         
         # Fill remaining NaN values with 0
-        feature_cols = self.feature_columns + [
-            'Win_Rate_Diff', 'Point_Diff_Ratio', 'Rest_Advantage',
-            'Streak_Advantage', 'Recent_Form_Ratio', 'Win_Rate_Rest_Interaction',
-            'Streak_Form_Interaction'
-        ]
+        feature_cols = self.feature_columns
         X = df[feature_cols].fillna(0)
         
         # Add debug logging
