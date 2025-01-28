@@ -365,3 +365,17 @@ Automated performance optimization with enhanced validation:
    - Enhanced validation for partial game predictions
    - Non-overlapping bet combinations enforced
    - Automatic rollback if performance drops >2% 
+
+## Data Processing
+
+### Historical Data Handling
+- Full historical data is preserved for computing rolling statistics
+- Rolling statistics are calculated using complete team history to ensure accurate feature generation
+- Data filtering (e.g., cutoff at 2022-10-18) is applied only after computing rolling statistics
+- Training data is filtered to recent seasons while maintaining historical context for features
+
+### Feature Generation
+- Rolling statistics use 5-game windows for main features
+- 3-game windows for recent form analysis
+- Both home and away games are considered for team statistics
+- League averages are used as fallback for teams with insufficient historical data

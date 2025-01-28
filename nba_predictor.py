@@ -411,7 +411,12 @@ class NBAPredictor:
         predictions['Moneyline_Pick'] = (predictions['Home_Win_Prob'] > 0.5).astype(int)
         
         # Spread and totals predictions
-        predictions['Predicted_Spread'] = self.spread_model.predict(X_scaled)
+        raw_spread = self.spread_model.predict(X_scaled)
+        predictions['Predicted_Spread'] = np.where(
+            predictions['Moneyline_Pick'] == 1,
+            -abs(raw_spread),  # Home team favored (negative spread)
+            abs(raw_spread)    # Away team favored (positive spread)
+        )
         predictions['Predicted_Total'] = self.totals_model.predict(X_scaled)
         
         # First Half predictions (based on historical patterns)

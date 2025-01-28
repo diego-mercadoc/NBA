@@ -925,7 +925,7 @@ class NBADataScraper:
         return None
 
     def compute_rolling_stats(self, games_df, window=5):
-        """Compute rolling statistics for teams"""
+        """Compute rolling statistics for teams using both home and away games"""
         try:
             if games_df is None or games_df.empty:
                 logging.info(f"No games to compute rolling stats for window={window}. Returning DataFrame as-is.")
@@ -936,6 +936,8 @@ class NBADataScraper:
 
             # Debug logging
             logging.info(f"Initial Home_Team dtype: {games_df['Home_Team'].dtype}")
+            logging.info(f"Date range in data: {games_df['Date'].min()} to {games_df['Date'].max()}")
+            logging.info(f"Total games in dataset: {len(games_df)}")
 
             # Convert Is_Future to boolean if it's not already
             if 'Is_Future' in games_df.columns:
@@ -949,27 +951,79 @@ class NBADataScraper:
             games_df['Away_Points_Scored'] = games_df['Away_Points'].fillna(0)
             games_df['Away_Points_Allowed'] = games_df['Home_Points'].fillna(0)
 
-            # Calculate rolling stats for home teams
-            for stat in ['Points_Scored', 'Points_Allowed']:
-                # Calculate rolling stats for each team
-                for team in games_df['Home_Team'].unique():
-                    team_games = games_df[games_df['Home_Team'] == team].copy()
-                    if not team_games.empty:
-                        team_games[f'Home_{stat}_Roll{window}'] = team_games[f'Home_{stat}'].rolling(
-                            window=window, min_periods=1
-                        ).mean()
-                        games_df.loc[games_df['Home_Team'] == team, f'Home_{stat}_Roll{window}'] = team_games[f'Home_{stat}_Roll{window}']
+            # Get unique teams from both home and away
+            all_teams = pd.concat([games_df['Home_Team'], games_df['Away_Team']]).unique()
+            logging.info(f"Processing rolling stats for {len(all_teams)} teams")
 
-            # Calculate rolling stats for away teams
-            for stat in ['Points_Scored', 'Points_Allowed']:
-                # Calculate rolling stats for each team
-                for team in games_df['Away_Team'].unique():
-                    team_games = games_df[games_df['Away_Team'] == team].copy()
-                    if not team_games.empty:
-                        team_games[f'Away_{stat}_Roll{window}'] = team_games[f'Away_{stat}'].rolling(
-                            window=window, min_periods=1
-                        ).mean()
-                        games_df.loc[games_df['Away_Team'] == team, f'Away_{stat}_Roll{window}'] = team_games[f'Away_{stat}_Roll{window}']
+            # Initialize rolling stat columns
+            roll_cols = [f'Home_Points_Scored_Roll{window}', f'Home_Points_Allowed_Roll{window}',
+                        f'Away_Points_Scored_Roll{window}', f'Away_Points_Allowed_Roll{window}']
+            for col in roll_cols:
+                games_df[col] = 0.0
+
+            # Calculate rolling stats for each team considering both home and away games
+            for team in all_teams:
+                logging.info(f"\nProcessing team: {team}")
+                
+                # Get all games for this team (both home and away)
+                home_games = games_df[games_df['Home_Team'] == team].copy()
+                away_games = games_df[games_df['Away_Team'] == team].copy()
+                
+                logging.info(f"Found {len(home_games)} home games and {len(away_games)} away games")
+                
+                # Create a combined history for the team
+                team_history = pd.DataFrame()
+                
+                # Add home games
+                if not home_games.empty:
+                    home_history = pd.DataFrame({
+                        'Date': pd.to_datetime(home_games['Date']),
+                        'Team': team,
+                        'Points_Scored': home_games['Home_Points'],
+                        'Points_Allowed': home_games['Away_Points'],
+                        'Is_Home': True
+                    })
+                    team_history = pd.concat([team_history, home_history])
+                
+                # Add away games
+                if not away_games.empty:
+                    away_history = pd.DataFrame({
+                        'Date': pd.to_datetime(away_games['Date']),
+                        'Team': team,
+                        'Points_Scored': away_games['Away_Points'],
+                        'Points_Allowed': away_games['Home_Points'],
+                        'Is_Home': False
+                    })
+                    team_history = pd.concat([team_history, away_history])
+                
+                if not team_history.empty:
+                    # Sort by date to ensure correct rolling calculations
+                    team_history = team_history.sort_values('Date')
+                    logging.info(f"Team history date range: {team_history['Date'].min()} to {team_history['Date'].max()}")
+                    logging.info(f"Total games in team history: {len(team_history)}")
+                    
+                    # Calculate rolling averages
+                    points_scored_roll = team_history['Points_Scored'].rolling(window=window, min_periods=1).mean()
+                    points_allowed_roll = team_history['Points_Allowed'].rolling(window=window, min_periods=1).mean()
+                    
+                    # Map rolling stats back to original dataframe
+                    for idx, row in team_history.iterrows():
+                        if row['Is_Home']:
+                            mask = (games_df['Home_Team'] == team) & (games_df['Date'] == row['Date'])
+                            if mask.any():
+                                games_df.loc[mask, [f'Home_Points_Scored_Roll{window}', f'Home_Points_Allowed_Roll{window}']] = [
+                                    points_scored_roll.loc[idx],
+                                    points_allowed_roll.loc[idx]
+                                ]
+                                logging.info(f"Updated home stats for {team} on {row['Date']}: Scored={points_scored_roll.loc[idx]:.1f}, Allowed={points_allowed_roll.loc[idx]:.1f}")
+                        else:
+                            mask = (games_df['Away_Team'] == team) & (games_df['Date'] == row['Date'])
+                            if mask.any():
+                                games_df.loc[mask, [f'Away_Points_Scored_Roll{window}', f'Away_Points_Allowed_Roll{window}']] = [
+                                    points_scored_roll.loc[idx],
+                                    points_allowed_roll.loc[idx]
+                                ]
+                                logging.info(f"Updated away stats for {team} on {row['Date']}: Scored={points_scored_roll.loc[idx]:.1f}, Allowed={points_allowed_roll.loc[idx]:.1f}")
 
             # Calculate point differentials
             games_df[f'Home_Point_Diff_Roll{window}'] = games_df[f'Home_Points_Scored_Roll{window}'] - games_df[f'Home_Points_Allowed_Roll{window}']
@@ -984,9 +1038,20 @@ class NBADataScraper:
             games_df[roll_cols] = games_df[roll_cols].fillna(0)
             
             # Apply emoji removal to betting insights (after calculating rolling stats)
-            if 'Home_Form' in games_df.columns and 'Away_Form' in games_df.columns: # ADDED check
-               games_df['Home_Form'] = games_df['Home_Form'].apply(self.remove_emojis) # ADDED
-               games_df['Away_Form'] = games_df['Away_Form'].apply(self.remove_emojis) # ADDED
+            if 'Home_Form' in games_df.columns and 'Away_Form' in games_df.columns:
+               games_df['Home_Form'] = games_df['Home_Form'].apply(self.remove_emojis)
+               games_df['Away_Form'] = games_df['Away_Form'].apply(self.remove_emojis)
+
+            # Log final stats
+            for col in roll_cols:
+                stats = games_df[col].describe()
+                logging.info(f"\nFinal stats for {col}:")
+                logging.info(f"Mean: {stats['mean']:.2f}")
+                logging.info(f"Std: {stats['std']:.2f}")
+                logging.info(f"Min: {stats['min']:.2f}")
+                logging.info(f"Max: {stats['max']:.2f}")
+                non_zero = (games_df[col] != 0).sum()
+                logging.info(f"Non-zero values: {non_zero} ({non_zero/len(games_df)*100:.1f}%)")
 
             return games_df
         except Exception as e:

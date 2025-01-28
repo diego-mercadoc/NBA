@@ -42,15 +42,11 @@ def main():
             return
         games_df = cleaned_df
 
-        # Filter out data before October 18, 2022
-        cutoff_date = pd.Timestamp('2022-10-18') # Naive cutoff_date
-        initial_rows = len(games_df)
-        games_df = games_df[games_df['Date'] >= cutoff_date].copy()
-        removed_rows = initial_rows - len(games_df)
-        logging.info(f"Removed {removed_rows} games before {cutoff_date.date()}")
+        # Keep full history for rolling stats
+        full_history_df = games_df.copy()
 
         # Convert Is_Future to boolean
-        games_df['Is_Future'] = games_df['Is_Future'].astype(bool)
+        full_history_df['Is_Future'] = full_history_df['Is_Future'].astype(bool)
 
         # Initialize predictor with enhanced settings
         predictor = NBAPredictor()
@@ -60,13 +56,17 @@ def main():
             logging.info("Loaded existing models.")
         else:
             logging.info("No existing models found. Training new models...")
-            # Compute rolling stats for all games (needed for training)
+            # Compute rolling stats on full historical data
             logging.info("Computing rolling statistics for historical data for training...")
-            games_df = scraper.compute_rolling_stats(games_df, window=5)
+            full_history_df = scraper.compute_rolling_stats(full_history_df, window=5)
 
-            logging.info("Training new models with loaded data...")
-            # Use only completed games for training
-            training_data = games_df[~games_df['Is_Future']].copy()
+            logging.info("Training new models with filtered data...")
+            # Filter data for training only after computing rolling stats
+            cutoff_date = pd.Timestamp('2022-10-18') # Naive cutoff_date
+            training_data = full_history_df[
+                (full_history_df['Date'] >= cutoff_date) & 
+                (~full_history_df['Is_Future'])
+            ].copy()
 
             # Add season-based weighting for training
             current_season = 2025
@@ -98,9 +98,14 @@ def main():
             # Store today's games indices before concatenation
             today_games_index = today_games.index
             
-            # Combine historical and today's games for proper rolling stats calculation
+            # Sort both dataframes by date before concatenation
+            full_history_df = full_history_df.sort_values('Date')
+            today_games = today_games.sort_values('Date')
+            
+            # Combine full historical data with today's games for proper rolling stats calculation
             logging.info("Combining historical and today's games for rolling statistics...")
-            combined_df = pd.concat([games_df, today_games], ignore_index=True)
+            combined_df = pd.concat([full_history_df, today_games], ignore_index=True)
+            combined_df = combined_df.sort_values('Date')
             
             # Compute rolling stats on the combined dataset
             logging.info("Computing rolling statistics on combined dataset...")
@@ -108,8 +113,47 @@ def main():
             combined_df = scraper.compute_rolling_stats(combined_df, window=3)  # Shorter window for recent form
             
             # Extract back only today's games with proper rolling stats
-            today_games = combined_df.tail(len(today_games)).copy()
+            today_games = combined_df[combined_df['Is_Future']].copy()
             
+            # Calculate win rates for home and away teams
+            today_games['Home_Win_Rate'] = today_games.apply(lambda row: 
+                len(full_history_df[(full_history_df['Home_Team'] == row['Home_Team']) & (full_history_df['Home_Points'] > full_history_df['Away_Points'])]) / 
+                len(full_history_df[full_history_df['Home_Team'] == row['Home_Team']]), axis=1)
+            
+            today_games['Away_Win_Rate'] = today_games.apply(lambda row:
+                len(full_history_df[(full_history_df['Away_Team'] == row['Away_Team']) & (full_history_df['Away_Points'] > full_history_df['Home_Points'])]) /
+                len(full_history_df[full_history_df['Away_Team'] == row['Away_Team']]), axis=1)
+
+            # Create derived features
+            today_games['Win_Rate_Diff'] = today_games['Home_Win_Rate'] - today_games['Away_Win_Rate']
+            today_games['Point_Diff_Ratio'] = (today_games['Home_Points_Scored_Roll5'] - today_games['Home_Points_Allowed_Roll5']) - \
+                                             (today_games['Away_Points_Scored_Roll5'] - today_games['Away_Points_Allowed_Roll5'])
+            today_games['Rest_Advantage'] = today_games['Home_Rest_Days'] - today_games['Away_Rest_Days']
+            today_games['Streak_Advantage'] = today_games['Home_Streak'] - today_games['Away_Streak']
+            today_games['Recent_Form_Ratio'] = (today_games['Home_Points_Scored_Roll3'] - today_games['Home_Points_Allowed_Roll3']) - \
+                                              (today_games['Away_Points_Scored_Roll3'] - today_games['Away_Points_Allowed_Roll3'])
+            today_games['Win_Rate_Rest_Interaction'] = today_games['Win_Rate_Diff'] * today_games['Rest_Advantage']
+            today_games['Streak_Form_Interaction'] = today_games['Streak_Advantage'] * today_games['Recent_Form_Ratio']
+
+            # Log feature statistics for today's games
+            logging.info("\nFeature statistics for today's games:")
+            for col in today_games.columns:
+                if col.endswith('_Roll5') or col.endswith('_Roll3') or col in ['Home_Streak', 'Away_Streak', 'Home_Rest_Days', 'Away_Rest_Days', 'Home_Win_Rate', 'Away_Win_Rate', 'Win_Rate_Diff', 'Point_Diff_Ratio', 'Rest_Advantage', 'Streak_Advantage', 'Recent_Form_Ratio', 'Win_Rate_Rest_Interaction', 'Streak_Form_Interaction']:
+                    stats = {
+                        'mean': today_games[col].mean(),
+                        'std': today_games[col].std(),
+                        'min': today_games[col].min(),
+                        'max': today_games[col].max(),
+                        'non_zero': (today_games[col] != 0).sum(),
+                        'total': len(today_games)
+                    }
+                    logging.info(f"\n{col}:")
+                    logging.info(f"  Mean: {stats['mean']:.3f}")
+                    logging.info(f"  Std: {stats['std']:.3f}")
+                    logging.info(f"  Min: {stats['min']:.3f}")
+                    logging.info(f"  Max: {stats['max']:.3f}")
+                    logging.info(f"  Non-zero values: {stats['non_zero']} ({stats['non_zero']/stats['total']*100:.1f}%)")
+
             logging.info("Making predictions...")
             predictions = predictor.predict_games(today_games)
 

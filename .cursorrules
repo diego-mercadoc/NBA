@@ -322,7 +322,11 @@
         "Ensure proper handling of future games",
         "Maintain data consistency across files",
         "Handle incomplete team stats gracefully",
-        "Track actual game counts per season"
+        "Track actual game counts per season",
+        "Preserve full historical data for rolling statistics calculations",
+        "Only filter data (e.g., cutoff date 2022-10-18) after computing rolling stats",
+        "Use filtered data for model training but keep complete history for feature generation",
+        "Ensure proper handling of both home and away team statistics"
     ],
     "logging": {
         "level": "INFO",
