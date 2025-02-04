@@ -282,10 +282,12 @@ class NBAPredictor:
         X_train_scaled = self.scaler.fit_transform(X_train)
         X_test_scaled = self.scaler.transform(X_test)
         
+        logging.info("Starting time-aware cross-validation for moneyline classifier...")
+        cv_accuracies = self.cross_validate_moneyline(X_train_scaled, y_ml_train, n_splits=5)
+        
         # Train base models separately
         logging.info("Training enhanced moneyline models...")
-        
-        # Train sklearn ensemble
+        # TODO: Consider implementing a more robust cross-validation strategy (e.g., StratifiedKFold or GridSearchCV) to ensure no leakage in moneyline classifier training.
         self.moneyline_model = VotingClassifier(
             estimators=[
                 ('rf', self.rf_classifier),
@@ -322,10 +324,12 @@ class NBAPredictor:
         logging.info("Training enhanced spread model...")
         self.spread_model = xgb.XGBRegressor(
             n_estimators=300,
-            max_depth=8,
-            learning_rate=0.03,
+            max_depth=7,
+            learning_rate=0.02,
             subsample=0.8,
             colsample_bytree=0.8,
+            reg_alpha=0.1,
+            reg_lambda=1.0,
             random_state=42
         )
         self.spread_model.fit(X_train_scaled, y_spread_train)
@@ -339,7 +343,7 @@ class NBAPredictor:
         logging.info("Training enhanced totals model...")
         self.totals_model = lgb.LGBMRegressor(
             n_estimators=300,
-            max_depth=8,
+            max_depth=6,
             learning_rate=0.03,
             subsample=0.8,
             colsample_bytree=0.8,
@@ -600,4 +604,34 @@ class NBAPredictor:
             else:
                 base_value *= 0.8
         
-        return min(base_value * 0.90, 1.0)  # Lower confidence for quarters 
+        return min(base_value * 0.90, 1.0)  # Lower confidence for quarters
+
+    def cross_validate_moneyline(self, X, y, n_splits=5):
+        """Perform time-aware cross-validation for the moneyline classifier using TimeSeriesSplit."""
+        from sklearn.model_selection import TimeSeriesSplit
+        from sklearn.metrics import accuracy_score
+        tscv = TimeSeriesSplit(n_splits=n_splits)
+        fold_accuracies = []
+        fold = 1
+        for train_idx, test_idx in tscv.split(X):
+            X_train_cv, X_test_cv = X[train_idx], X[test_idx]
+            y_train_cv, y_test_cv = y[train_idx], y[test_idx]
+            # Create a new VotingClassifier instance with the same parameters
+            model = VotingClassifier(
+                estimators=[
+                    ('rf', self.rf_classifier),
+                    ('lr', self.lr_classifier),
+                    ('svm', self.svm_classifier)
+                ],
+                voting='soft',
+                weights=[2, 1, 1]
+            )
+            model.fit(X_train_cv, y_train_cv)
+            y_pred_cv = model.predict(X_test_cv)
+            acc = accuracy_score(y_test_cv, y_pred_cv)
+            fold_accuracies.append(acc)
+            logging.info(f"Fold {fold} Moneyline CV Accuracy: {acc:.3f}")
+            fold += 1
+        mean_acc = np.mean(fold_accuracies)
+        logging.info(f"Mean Time-Aware Moneyline CV Accuracy: {mean_acc:.3f}")
+        return fold_accuracies 
