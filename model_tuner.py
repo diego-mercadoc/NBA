@@ -609,6 +609,25 @@ class ModelTuner:
             return False
 
 
+    def validate_features(self, X, feature_names):
+        """Validate that features (X) and the feature names list are correctly structured.
+        
+        Returns:
+            bool: True if X is a numpy array with the proper number of columns matching feature_names.
+        """
+        if not isinstance(X, np.ndarray):
+            logging.error("Features are not a numpy array.")
+            return False
+        if not isinstance(feature_names, list):
+            logging.error("Feature names are not provided as a list.")
+            return False
+        if X.shape[1] != len(feature_names):
+            logging.error(f"Feature dimension mismatch: X has {X.shape[1]} columns, expected {len(feature_names)}.")
+            return False
+        logging.info("Feature validation passed.")
+        return True
+
+
 if __name__ == "__main__":
     logging.basicConfig(
         level=logging.INFO,

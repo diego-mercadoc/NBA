@@ -305,6 +305,11 @@ class NBAPredictor:
         # Train LightGBM
         self.lgb_classifier.fit(X_train_scaled, y_ml_train)
         
+        # Patch decision tree classifiers in the moneyline model to ensure 'monotonic_cst' attribute exists.
+        for estimator in self.moneyline_model.estimators_:
+            if not hasattr(estimator, 'monotonic_cst'):
+                estimator.monotonic_cst = None
+
         # Get predictions from all models
         sklearn_proba = self.moneyline_model.predict_proba(X_test_scaled)
         xgb_proba = self.xgb_classifier.predict_proba(X_test_scaled)
