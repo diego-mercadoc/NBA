@@ -657,7 +657,7 @@
         "patience": 50,
         "min_delta": 0.001,
         "usage": "Configured in the XGBoost constructor; custom_cv_iterator resets indices to ensure a valid eval_set.",
-        "description": "Ensures that each fold's training and validation sets have sequential indices starting at 0.",
+        "description": "Each fold's training and validation sets have their indices reset (using reset_index(drop=True)), ensuring sequential indices for XGBoost's early stopping.",
         "implementation": {
           "moneyline": {
             "rounds": 50,

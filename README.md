@@ -91,6 +91,15 @@ Latest model metrics (as of January 26, 2025):
   * Early stopping with validation set
   * Enhanced feature engineering for better predictions
   * Removed ensemble averaging to reduce complexity
+- XGBoost Early Stopping Improvements:
+  * Custom CV iterator with index reset
+  * Sequential indices for eval_set
+  * Separate moneyline and totals models
+  * Distinct model storage and tracking
+  * Improved validation metrics
+  * Resolved "Must have at least 1 validation dataset" error
+  * Preserved feature names for analysis
+  * Enhanced error handling and logging
 
 ## Development Roadmap
 1. **Data Quality & Storage** (In Progress)
@@ -211,13 +220,17 @@ Predictions include:
 2. Regression Models (Spread and Totals):
    - Both spread and totals predictions now use XGBoost exclusively
    - Early stopping configuration:
-     * Patience: 20 rounds
+     * Patience: 50 rounds
      * Minimum delta: 0.001
      * Best model saving enabled
-     * Separate validation set for stopping criteria
+     * Custom CV iterator with index reset
+     * Sequential indices for eval_set
+     * Preserved feature names for analysis
    - Spread Model: XGBoost with optimized hyperparameters
    - Totals Model: Single XGBoost model (removed LightGBM ensemble)
    - Version compatibility checks ensure proper functionality
+   - Distinct model storage and tracking
+   - Enhanced validation metrics
 
 3. Data Processing:
    - 80/20 train-test split
