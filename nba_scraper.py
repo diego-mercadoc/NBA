@@ -382,17 +382,14 @@ class NBADataScraper:
         return games_df
 
     def add_rest_days(self, df):
-        """Calculate days of rest for each team"""
-        df = df.sort_values('Date')
-
+        """Calculate days of rest for each team using groupby and transform."""
+        df = df.sort_values('Date').copy()
         for team_type in ['Home', 'Away']:
-            rest_days = []
-            for team in df[f'{team_type}_Team'].unique():
-                team_games = df[df[f'{team_type}_Team'] == team].copy()
-                team_games['Days_Rest'] = (team_games['Date'] - team_games['Date'].shift(1)).dt.days
-                rest_days.extend(team_games['Days_Rest'].tolist())
-            df[f'{team_type}_Rest_Days'] = rest_days
-
+            # Compute the difference in days for each team's games
+            diff_series = df.groupby(f'{team_type}_Team')['Date'].transform(lambda x: x.diff().dt.days)
+            # Fill NaN for the first game in each group with the median rest days or default to 7 if median is nan
+            median_rest = diff_series.median()
+            df[f'{team_type}_Rest_Days'] = diff_series.fillna(median_rest if not pd.isna(median_rest) else 7)
         return df
 
     def add_streaks(self, df):

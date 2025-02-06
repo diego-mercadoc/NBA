@@ -9,6 +9,22 @@ import shutil
 from datetime import datetime
 import pytz
 
+def safe_win_rate(team, home=True, history_df=None):
+    """Calculate win rate for a given team safely, returning 0.5 if no historical data is found."""
+    if history_df is None:
+        return 0.5
+    if home:
+        team_games = history_df[history_df['Home_Team'] == team]
+        if len(team_games) == 0:
+            return 0.5
+        wins = team_games[team_games['Home_Points'] > team_games['Away_Points']]
+    else:
+        team_games = history_df[history_df['Away_Team'] == team]
+        if len(team_games) == 0:
+            return 0.5
+        wins = team_games[team_games['Away_Points'] > team_games['Home_Points']]
+    return len(wins) / len(team_games)
+
 def main():
     """Train models and generate predictions for today's games"""
     try:
@@ -116,13 +132,8 @@ def main():
             today_games = combined_df[combined_df['Is_Future']].copy()
             
             # Calculate win rates for home and away teams
-            today_games['Home_Win_Rate'] = today_games.apply(lambda row: 
-                len(full_history_df[(full_history_df['Home_Team'] == row['Home_Team']) & (full_history_df['Home_Points'] > full_history_df['Away_Points'])]) / 
-                len(full_history_df[full_history_df['Home_Team'] == row['Home_Team']]), axis=1)
-            
-            today_games['Away_Win_Rate'] = today_games.apply(lambda row:
-                len(full_history_df[(full_history_df['Away_Team'] == row['Away_Team']) & (full_history_df['Away_Points'] > full_history_df['Home_Points'])]) /
-                len(full_history_df[full_history_df['Away_Team'] == row['Away_Team']]), axis=1)
+            today_games['Home_Win_Rate'] = today_games['Home_Team'].apply(lambda team: safe_win_rate(team, home=True, history_df=full_history_df))
+            today_games['Away_Win_Rate'] = today_games['Away_Team'].apply(lambda team: safe_win_rate(team, home=False, history_df=full_history_df))
 
             # Create derived features
             today_games['Win_Rate_Diff'] = today_games['Home_Win_Rate'] - today_games['Away_Win_Rate']
