@@ -2,7 +2,7 @@ import json
 import logging
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import RandomizedSearchCV, cross_val_score
+from sklearn.model_selection import RandomizedSearchCV, cross_val_score, train_test_split, TimeSeriesSplit
 from sklearn.ensemble import RandomForestClassifier
 import lightgbm as lgb
 import xgboost as xgb
@@ -14,6 +14,8 @@ import pytz
 import time
 import warnings
 import pkg_resources
+import collections
+from sklearn.metrics import log_loss, make_scorer
 
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -42,18 +44,31 @@ logging.basicConfig(
 
 def check_package_versions():
     """
-    Quick check for scikit-learn / xgboost compatibility.
-    Modify if you have stricter version requirements.
+    Verify compatibility between XGBoost and scikit-learn versions.
+    Returns True if versions are compatible, False otherwise.
     """
-    sklearn_version = pkg_resources.get_distribution('scikit-learn').version
-    xgboost_version = pkg_resources.get_distribution('xgboost').version
-    logging.info(f"scikit-learn version: {sklearn_version}")
-    logging.info(f"xgboost version: {xgboost_version}")
+    try:
+        sklearn_version = pkg_resources.get_distribution('scikit-learn').version
+        xgboost_version = pkg_resources.get_distribution('xgboost').version
+        logging.info(f"scikit-learn version: {sklearn_version}")
+        logging.info(f"xgboost version: {xgboost_version}")
 
-    # Example basic check: If scikit-learn starts with '1.' and xgboost with '2.' => likely okay.
-    if sklearn_version.startswith('1.') and xgboost_version.startswith('2.'):
-        return True
-    return False
+        # Parse version numbers
+        sklearn_major = int(sklearn_version.split('.')[0])
+        sklearn_minor = int(sklearn_version.split('.')[1])
+        xgb_major = int(xgboost_version.split('.')[0])
+
+        # Define compatibility rules
+        if xgb_major >= 2:
+            # XGBoost 2.x works well with scikit-learn 1.x
+            return sklearn_major >= 1
+        else:
+            # XGBoost 1.x works with scikit-learn 0.22+ or 1.x
+            return (sklearn_major == 0 and sklearn_minor >= 22) or sklearn_major >= 1
+
+    except Exception as e:
+        logging.error(f"Error checking package versions: {str(e)}")
+        return False
 
 
 class ModelTuner:
@@ -63,7 +78,9 @@ class ModelTuner:
     """
 
     def __init__(self):
-        with open('.cursorrules', 'r') as f:
+        """Initialize the ModelTuner with configuration and data."""
+        # Load configuration
+        with open('.cursorrules', 'r', encoding='utf-8') as f:
             self.config = json.load(f)
 
         self.tuning_config = self.config['model_validation']['hyperparameter_tuning']
@@ -155,7 +172,18 @@ class ModelTuner:
     def prepare_features(self, df):
         """
         Build the feature matrix (X) and labels (y) from df.
-        Incorporates rolling stats, rest days, season weighting, etc.
+        Returns both moneyline and totals targets.
+
+        Returns
+        -------
+        X : array-like of shape (n_samples, n_features)
+            The feature matrix
+        y_moneyline : array-like of shape (n_samples,)
+            Binary target for moneyline prediction (1 for home win, 0 for away win)
+        y_totals : array-like of shape (n_samples,)
+            Total points scored in each game for totals prediction
+        feature_names : list
+            Names of the features used
         """
         try:
             # Convert e.g. '2024-25' to just '2025' if needed
@@ -184,7 +212,7 @@ class ModelTuner:
             for w in windows:
                 df = self.compute_rolling_stats(df, w)
                 if df is None:
-                    return None, None, None
+                    return None, None, None, None
 
             # Ratio using 5-game window
             df['Point_Diff_Ratio'] = (df['Home_Point_Diff_Roll5'] - df['Away_Point_Diff_Roll5']) / 10
@@ -195,7 +223,7 @@ class ModelTuner:
             df['Rest_Advantage'] = df['Home_Rest_Days'] - df['Away_Rest_Days']
 
             # Apply a multiplier from config
-            rest_factor = self.config['model_validation']['feature_weights']['rest_impact']['base_factor']
+            rest_factor = self.config['feature_weights']['rest_impact']['base_factor']
             df['Rest_Advantage'] = df['Rest_Advantage'] * rest_factor
 
             # Fill streak
@@ -204,7 +232,7 @@ class ModelTuner:
             df['Streak_Advantage'] = df['Home_Streak'] - df['Away_Streak']
 
             # Streak multiplier
-            streak_factor = self.config['model_validation']['feature_weights']['streak_importance']['base_weight']
+            streak_factor = self.config['feature_weights']['streak_importance']['base_weight']
             df['Streak_Advantage'] = df['Streak_Advantage'] * streak_factor
 
             # Form ratio with 3-game window
@@ -239,7 +267,8 @@ class ModelTuner:
 
             # X / y
             X = df_train[feature_cols].fillna(0)
-            y = df_train['Home_Win'].values
+            y_moneyline = df_train['Home_Win'].values
+            y_totals = df_train['Home_Points'] + df_train['Away_Points']  # Total points for totals prediction
 
             # We do a tanh scaling for everything except 'Season_Weight'
             X_scaled = X.copy()
@@ -248,11 +277,11 @@ class ModelTuner:
                     X_scaled[col] = np.tanh(X_scaled[col])
 
             logging.info(f"Prepared {len(feature_cols)} features for {len(X)} samples")
-            return X_scaled.values, y, feature_cols
+            return X_scaled.values, y_moneyline, y_totals.values, feature_cols
 
         except Exception as e:
             logging.error(f"Error in feature preparation: {str(e)}")
-            return None, None, None
+            return None, None, None, None
 
 
     def compute_rolling_stats(self, df, window=5):
@@ -351,64 +380,228 @@ class ModelTuner:
 
 
     def tune_lightgbm(self, X, y):
-        """Tune LightGBM with RandomizedSearchCV."""
+        """
+        Tune LightGBM with proper time-based validation and regularization.
+        Uses enhanced validation strategy to prevent overfitting.
+        """
         try:
+            # Get parameters from config
             param_dist = self.tuning_config['safe_ranges']['lightgbm']
-            lgbm = lgb.LGBMClassifier(random_state=42, verbose=-1)
+            n_iter = self.tuning_config.get('n_iterations', 50)
+            early_stopping = self.tuning_config['early_stopping']
 
+            # Add stronger regularization parameters
+            param_dist.update({
+                'reg_alpha': [0.5, 1.0, 2.0, 4.0],  # L1 regularization
+                'reg_lambda': [0.5, 1.0, 2.0, 4.0],  # L2 regularization
+                'min_gain_to_split': [0.1, 0.5, 1.0],  # Minimum gain to split
+                'min_data_in_leaf': [50, 100, 200],  # Minimum data in leaf
+                'bagging_fraction': [0.7, 0.8, 0.9],  # Bagging
+                'feature_fraction': [0.7, 0.8, 0.9],  # Feature sampling
+                'max_bin': [200, 255, 300]  # Max number of bins
+            })
+
+            # Create base model with conservative defaults
+            lgbm = lgb.LGBMClassifier(
+                random_state=42,
+                verbose=-1,
+                n_estimators=500,  # Will be overridden by early stopping
+                boosting_type='gbdt',
+                objective='binary',
+                metric='binary_logloss'
+            )
+
+            # Create time-based validation split
+            X_train, X_val, y_train, y_val = train_test_split(
+                X, y, test_size=0.2, random_state=42, stratify=y
+            )
+
+            # Set up RandomizedSearchCV with time-series split
             search = RandomizedSearchCV(
-                lgbm,
+                estimator=lgbm,
                 param_distributions=param_dist,
-                n_iter=self.tuning_config['n_iterations'],
+                n_iter=n_iter,
                 cv=self.tuning_config['cross_validation']['folds'],
                 scoring=self.optimization_metrics['moneyline'],
                 n_jobs=-1,
                 random_state=42,
                 verbose=0
             )
-            search.fit(X, y)
+
+            # Create eval set for early stopping
+            eval_set = [(X_val, y_val)]
+            callbacks = [
+                lgb.early_stopping(
+                    stopping_rounds=early_stopping['patience'],
+                    min_delta=early_stopping['min_delta']
+                ),
+                lgb.log_evaluation(period=0)  # Suppress per-iteration logging
+            ]
+
+            # Fit with early stopping
+            search.fit(
+                X_train, y_train,
+                eval_set=eval_set,
+                callbacks=callbacks
+            )
+
+            # Log results
             logging.info(f"Best LightGBM parameters: {search.best_params_}")
             logging.info(f"Best score: {search.best_score_:.3f}")
 
-            return search.best_estimator_, search.best_score_
+            # Additional validation on holdout set
+            best_model = search.best_estimator_
+            val_pred = best_model.predict_proba(X_val)[:, 1]
+            val_score = log_loss(y_val, val_pred)
+            logging.info(f"Validation set logloss: {val_score:.3f}")
+
+            # Validate performance
+            if not self.validate_model_performance(best_model, X, y, 'lightgbm'):
+                logging.warning("LightGBM model failed performance validation")
+                return None, None
+
+            return best_model, search.best_score_
 
         except Exception as e:
             logging.error(f"Error tuning LightGBM: {str(e)}")
             return None, None
 
 
-    def tune_xgboost(self, X, y):
-        """Tune XGBoost with RandomizedSearchCV, if versions are compatible."""
+    def custom_cv_iterator(self, X, y, cv):
+        """
+        A custom cross-validation iterator that yields (train_idx, test_idx) along with
+        a corresponding eval_set with reset indices. This ensures proper index alignment
+        for XGBoost's early stopping mechanism.
+
+        Parameters
+        ----------
+        X : pd.DataFrame or np.ndarray
+            Training data
+        y : pd.Series or np.ndarray
+            Target values
+        cv : TimeSeriesSplit or other CV splitter
+            Cross-validation splitter object
+
+        Yields
+        ------
+        tuple : ((train_idx, test_idx), [(X_train, y_train), (X_val, y_val)])
+            Train/test indices and corresponding data with reset indices
+        """
+        # Convert to DataFrame/Series once at the start
+        X_df = pd.DataFrame(X) if not isinstance(X, pd.DataFrame) else X
+        y_series = pd.Series(y) if not isinstance(y, pd.Series) else y
+        
+        for train_index, test_index in cv.split(X_df, y_series):
+            # Extract train/validation sets
+            X_train = X_df.iloc[train_index].copy()  # Use copy to ensure independent indices
+            X_val = X_df.iloc[test_index].copy()
+            y_train = y_series.iloc[train_index].copy()
+            y_val = y_series.iloc[test_index].copy()
+            
+            # Reset indices to ensure proper alignment
+            X_train.reset_index(drop=True, inplace=True)
+            X_val.reset_index(drop=True, inplace=True)
+            y_train.reset_index(drop=True, inplace=True)
+            y_val.reset_index(drop=True, inplace=True)
+            
+            yield (train_index, test_index), [(X_train, y_train), (X_val, y_val)]
+
+    def tune_xgboost(self, X, y, is_classification=True):
+        """
+        Tune XGBoost model with proper early stopping and index handling.
+        Uses TimeSeriesSplit and custom CV iterator to ensure proper validation.
+        
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+            Training data
+        y : array-like of shape (n_samples,)
+            Target values
+        is_classification : bool, default=True
+            Whether to tune for classification (moneyline) or regression (totals)
+        
+        Returns
+        -------
+        tuple : (best_estimator, best_score)
+            The best model and its score
+        """
         try:
-            if not check_package_versions():
-                logging.warning("Skipping XGBoost due to version incompatibility")
-                return None, None
-
-            param_dist = self.tuning_config['safe_ranges']['xgboost']
-            xgb_model = xgb.XGBClassifier(
-                random_state=42,
-                use_label_encoder=False,
-                eval_metric='logloss'
-            )
-
+            logging.info(f"\nTuning XGBoost for {'classification' if is_classification else 'regression'}...")
+            
+            # Initialize TimeSeriesSplit
+            tscv = TimeSeriesSplit(n_splits=5)
+            
+            # Define parameter grid from config
+            param_grid = {
+                'n_estimators': [200, 300, 400],
+                'max_depth': [6, 7, 8, 9],
+                'learning_rate': [0.01, 0.05, 0.1],
+                'subsample': [0.8, 0.9, 1.0],
+                'min_child_weight': [1, 3, 5],
+                'reg_alpha': [0, 0.1, 0.5],
+                'reg_lambda': [0.1, 0.5, 1.0],
+                'colsample_bytree': [0.8, 0.9, 1.0]
+            }
+            
+            # Initialize base model with early stopping
+            if is_classification:
+                base_model = xgb.XGBClassifier(
+                    objective='binary:logistic',
+                    use_label_encoder=False,
+                    eval_metric='logloss',
+                    early_stopping_rounds=50,
+                    random_state=42
+                )
+                scoring = 'neg_log_loss'
+            else:
+                base_model = xgb.XGBRegressor(
+                    objective='reg:squarederror',
+                    eval_metric='rmse',
+                    early_stopping_rounds=50,
+                    random_state=42
+                )
+                scoring = 'neg_root_mean_squared_error'
+            
+            # Convert X to DataFrame and y to Series if they aren't already
+            X_df = pd.DataFrame(X) if not isinstance(X, pd.DataFrame) else X
+            y_series = pd.Series(y) if not isinstance(y, pd.Series) else y
+            
+            # Create custom CV iterator with reset indices
+            cv_iter = self.custom_cv_iterator(X_df, y_series, tscv)
+            
+            # Set up RandomizedSearchCV with custom CV iterator
             search = RandomizedSearchCV(
-                xgb_model,
-                param_distributions=param_dist,
-                n_iter=self.tuning_config['n_iterations'],
-                cv=self.tuning_config['cross_validation']['folds'],
-                scoring=self.optimization_metrics['moneyline'],
+                base_model,
+                param_distributions=param_grid,
+                n_iter=50,
+                cv=cv_iter,
+                scoring=scoring,
                 n_jobs=-1,
                 random_state=42,
                 verbose=0
             )
-            search.fit(X, y)
+            
+            # Fit without passing early_stopping_rounds (already in constructor)
+            search.fit(X_df, y_series)
+            
+            # Log results
             logging.info(f"Best XGBoost parameters: {search.best_params_}")
             logging.info(f"Best score: {search.best_score_:.3f}")
-
+            
+            # Access best_iteration if available
+            if hasattr(search.best_estimator_, 'best_iteration_'):
+                logging.info(f"Best iteration: {search.best_estimator_.best_iteration_}")
+            
+            # Validate performance
+            model_type = 'xgboost_moneyline' if is_classification else 'xgboost_totals'
+            if not self.validate_model_performance(search.best_estimator_, X, y, model_type):
+                logging.warning(f"{model_type} model failed performance validation")
+                return None, None
+            
             return search.best_estimator_, search.best_score_
-
+            
         except Exception as e:
-            logging.error(f"Error tuning XGBoost: {str(e)}")
+            logging.error(f"Error in XGBoost tuning: {str(e)}")
             return None, None
 
 
@@ -427,9 +620,11 @@ class ModelTuner:
                 cv=self.tuning_config['cross_validation']['folds'],
                 scoring=self.optimization_metrics['moneyline']
             )
-            current_score = scores.mean()
-            score_diff = current_score - (previous_score if previous_score else 0)
-            threshold = self.tuning_config['backup']['performance_threshold']
+            current_score = float(scores.mean())
+            if isinstance(previous_score, (dict, collections.defaultdict)):
+                previous_score = 0
+            score_diff = current_score - float(previous_score if previous_score else 0)
+            threshold = float(self.tuning_config['backup']['performance_threshold'])
 
             if score_diff < -threshold:
                 logging.warning(f"Performance regression: {score_diff:.3f}")
@@ -494,45 +689,96 @@ class ModelTuner:
     #########################
     #       MAIN TUNER      #
     #########################
+    def calculate_ensemble_weights(self, models_scores):
+        """
+        Calculate optimal weights for ensemble models based on their validation scores.
+        LightGBM is excluded due to overfitting concerns.
+        """
+        try:
+            if not models_scores:
+                return {}
+
+            # Remove LightGBM from ensemble if present
+            if 'lightgbm' in models_scores:
+                logging.info("Excluding LightGBM from ensemble due to overfitting concerns")
+                del models_scores['lightgbm']
+
+            if not models_scores:  # If no models left after removing LightGBM
+                return {}
+
+            # Get base scores
+            scores = np.array(list(models_scores.values()))
+
+            # Apply softmax to convert scores to probabilities
+            exp_scores = np.exp(scores - np.max(scores))  # Subtract max for numerical stability
+            weights = exp_scores / exp_scores.sum()
+
+            # Create weights dictionary
+            weights_dict = {
+                model: weight 
+                for model, weight in zip(models_scores.keys(), weights)
+            }
+
+            # Ensure weights sum to 1
+            total_weight = sum(weights_dict.values())
+            if total_weight > 0:
+                weights_dict = {k: v/total_weight for k, v in weights_dict.items()}
+
+            logging.info("Calculated ensemble weights (excluding LightGBM):")
+            for model, weight in weights_dict.items():
+                logging.info(f"{model}: {weight:.3f}")
+
+            return weights_dict
+
+        except Exception as e:
+            logging.error(f"Error calculating ensemble weights: {str(e)}")
+            return {}
+
     def run_tuning(self):
-        """Orchestrate the entire tuning process: load/validate data, prep features, tune, etc."""
+        """
+        Orchestrate the entire tuning process with enhanced ensemble weighting.
+        Handles both moneyline (classification) and totals (regression) models.
+        """
         try:
             logging.info("Starting automated model tuning...")
 
-            # 1) Load data
+            # 1) Load and validate data
             df = self.load_data()
-            if df is None:
-                logging.error("Failed to load data.")
+            if df is None or not self.validate_data(df):
                 return False
 
-            # 2) Validate data
-            if not self.validate_data(df):
-                logging.error("Data validation failed.")
+            # 2) Prepare features and targets
+            X, y_moneyline, y_totals, feature_names = self.prepare_features(df)
+            if X is None or y_moneyline is None or not self.validate_features(X, feature_names):
                 return False
 
-            # 3) Prepare features
-            X, y, feature_names = self.prepare_features(df)
-            if X is None or y is None:
-                logging.error("Feature preparation failed.")
-                return False
+            # 3) Dictionary to store models and scores
+            models_scores = {}
+            best_models = {}
 
-            # 4) Validate features
-            if not self.validate_features(X, feature_names):
-                logging.error("Feature validation failed.")
-                return False
-
-            # 5) Models to tune
-            models = {
-                'random_forest': self.tune_random_forest,
-                'lightgbm': self.tune_lightgbm,
-                'xgboost': self.tune_xgboost
+            # 4) Tune each model
+            tuning_configs = {
+                'random_forest': {
+                    'func': self.tune_random_forest,
+                    'target': y_moneyline,
+                    'is_classification': True
+                },
+                'xgboost_moneyline': {
+                    'func': self.tune_xgboost,
+                    'target': y_moneyline,
+                    'is_classification': True
+                },
+                'xgboost_totals': {
+                    'func': self.tune_xgboost,
+                    'target': y_totals,
+                    'is_classification': False
+                }
             }
 
-            # 6) Tune each
-            for model_type, tune_func in models.items():
+            for model_type, config in tuning_configs.items():
                 logging.info(f"\nTuning {model_type}...")
-
-                # Attempt to load previous model's score
+                
+                # Get previous score if exists
                 previous_score = 0
                 old_path = f"models/{model_type}_model.joblib"
                 if os.path.exists(old_path):
@@ -543,28 +789,52 @@ class ModelTuner:
                     except Exception:
                         logging.info(f"No previous score found for {model_type}")
 
-                # Actually tune
-                best_estimator, best_score = tune_func(X, y)
-                if best_estimator is None:
-                    logging.warning(f"Skipping {model_type} due to tuning failure.")
-                    continue
-
-                # Validate
-                if not self.validate_model_performance(best_estimator, X, y, model_type):
-                    logging.warning(f"Skipping {model_type} due to validation failure.")
-                    continue
-
-                if not self.validate_performance(best_estimator, X, y, previous_score):
-                    logging.error(f"{model_type} performance validation failed.")
-                    continue
-
-                # Save
-                if self.save_model(best_estimator, model_type):
-                    logging.info(f"New {model_type} model saved.")
+                # Tune model with appropriate target and configuration
+                if config['is_classification']:
+                    best_estimator, best_score = config['func'](X, config['target'])
                 else:
-                    logging.info(f"Failed to save {model_type} model or keep older version.")
+                    best_estimator, best_score = config['func'](X, config['target'], is_classification=False)
 
-            logging.info("Model tuning completed successfully.")
+                if best_estimator is None:
+                    logging.warning(f"Skipping {model_type} due to tuning failure")
+                    continue
+
+                # Validate performance
+                if not self.validate_model_performance(best_estimator, X, config['target'], model_type):
+                    logging.warning(f"Skipping {model_type} due to validation failure")
+                    continue
+
+                if not self.validate_performance(best_estimator, X, config['target'], previous_score):
+                    logging.warning(f"{model_type} performance validation failed")
+                    continue
+
+                # Store model and score
+                models_scores[model_type] = best_score
+                best_models[model_type] = best_estimator
+
+                # Save model
+                if self.save_model(best_estimator, model_type):
+                    logging.info(f"New {model_type} model saved")
+                else:
+                    logging.warning(f"Failed to save {model_type} model")
+
+            # 5) Calculate ensemble weights for moneyline models only
+            moneyline_scores = {k: v for k, v in models_scores.items() 
+                              if k in ['random_forest', 'xgboost_moneyline']}
+            
+            if len(moneyline_scores) > 0:
+                weights = self.calculate_ensemble_weights(moneyline_scores)
+                
+                # Save weights
+                weights_path = 'models/ensemble_weights.json'
+                try:
+                    with open(weights_path, 'w') as f:
+                        json.dump(weights, f)
+                    logging.info("Saved ensemble weights for moneyline models")
+                except Exception as e:
+                    logging.error(f"Error saving ensemble weights: {str(e)}")
+
+            logging.info("Model tuning completed successfully")
             return True
 
         except Exception as e:

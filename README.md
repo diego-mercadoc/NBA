@@ -86,6 +86,11 @@ Latest model metrics (as of January 26, 2025):
 - Added first half and first quarter predictions
 - Improved value rating calculations
 - Enhanced error handling and NaN value processing
+- Simplified totals prediction system:
+  * Single XGBoost model with optimized hyperparameters
+  * Early stopping with validation set
+  * Enhanced feature engineering for better predictions
+  * Removed ensemble averaging to reduce complexity
 
 ## Development Roadmap
 1. **Data Quality & Storage** (In Progress)
@@ -195,24 +200,37 @@ Predictions include:
 
 #### Model Architecture
 1. Moneyline Ensemble:
-   - Random Forest (500 estimators, max depth 12)
-   - Logistic Regression (C=0.8)
-   - SVM (RBF kernel, C=10.0)
-   - XGBoost (300 estimators, max depth 8)
-   - LightGBM (300 estimators, max depth 8)
+   - The ensemble now uses a simplified architecture with proven models:
+     * RandomForest: 500 estimators, max depth 12 (weight: 2)
+     * SVM: RBF kernel, C=10.0 (weight: 1)
+     * XGBoost: 300 estimators, max depth 8, learning_rate=0.03 (weight: 2)
+   - LightGBM removed due to overfitting concerns
+   - Weights optimized for model stability and performance
+   - Each model's contribution is proportional to its historical performance
 
-2. Data Processing:
+2. Regression Models (Spread and Totals):
+   - Both spread and totals predictions now use XGBoost exclusively
+   - Early stopping configuration:
+     * Patience: 20 rounds
+     * Minimum delta: 0.001
+     * Best model saving enabled
+     * Separate validation set for stopping criteria
+   - Spread Model: XGBoost with optimized hyperparameters
+   - Totals Model: Single XGBoost model (removed LightGBM ensemble)
+   - Version compatibility checks ensure proper functionality
+
+3. Data Processing:
    - 80/20 train-test split
    - StandardScaler normalization
    - Comprehensive NaN handling
    - Stratified sampling for balanced classes
+   - Time-based validation to prevent data leakage
 
-3. Performance Metrics:
-   - Moneyline: 80.0% accuracy
-     * Class 0: 0.86 precision, 0.75 recall
-     * Class 1: 0.75 precision, 0.86 recall
-   - Spread: 15.155 RMSE
-   - Totals: 14.435 RMSE
+4. Performance Metrics (as of January 26, 2025):
+   - Moneyline: 74.1% accuracy (target: 85%)
+   - Spread: 18.083 RMSE (target: 12.0)
+   - Totals: 21.734 RMSE (target: 16.0)
+   - Note: Performance metrics are below target thresholds, but enhanced validation and feature engineering are in place
 
 ### Usage
 
@@ -318,7 +336,7 @@ Automated performance optimization with enhanced validation:
 4. Hyperparameter Tuning:
    - RandomizedSearchCV with 50 iterations
    - Optimized parameter ranges for each model
-   - Early stopping with 10 epochs patience
+   - Early stopping with proper index handling
    - Multiple validation periods
    - Automatic model backup
 
@@ -329,19 +347,21 @@ Automated performance optimization with enhanced validation:
      * Min samples split: 2-4
      * Min samples leaf: 1-3
    
-   - LightGBM:
-     * Estimators: 250-350
-     * Max depth: 7-9
-     * Learning rate: 0.08-0.12
-     * Num leaves: 31-127
-     * Min child samples: 20-50
+   - XGBoost (Moneyline):
+     * Estimators: 200-400
+     * Max depth: 6-9
+     * Learning rate: 0.01-0.1
+     * Early stopping: 50 rounds
+     * Eval metric: logloss
+     * Custom CV with reset indices
    
-   - XGBoost:
-     * Estimators: 250-350
-     * Max depth: 7-9
-     * Learning rate: 0.08-0.12
-     * Min child weight: 1-5
-     * Subsample: 0.8-1.0
+   - XGBoost (Totals):
+     * Estimators: 200-400
+     * Max depth: 6-9
+     * Learning rate: 0.01-0.1
+     * Early stopping: 50 rounds
+     * Eval metric: rmse
+     * Custom CV with reset indices
 
 6. Safety Measures:
    - Best model versioning
@@ -364,7 +384,17 @@ Automated performance optimization with enhanced validation:
    - Value rating minimum: 0.70
    - Enhanced validation for partial game predictions
    - Non-overlapping bet combinations enforced
-   - Automatic rollback if performance drops >2% 
+   - Automatic rollback if performance drops >2%
+
+9. XGBoost Early Stopping Improvements:
+   - Custom CV iterator with index reset
+   - Sequential indices for eval_set
+   - Separate moneyline and totals models
+   - Distinct model storage and tracking
+   - Improved validation metrics
+   - Resolved "Must have at least 1 validation dataset" error
+   - Preserved feature names for analysis
+   - Enhanced error handling and logging
 
 ## Data Processing
 

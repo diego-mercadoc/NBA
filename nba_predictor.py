@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.model_selection import train_test_split, GridSearchCV, RandomizedSearchCV
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingRegressor, VotingClassifier
 from sklearn.metrics import accuracy_score, mean_squared_error, classification_report
@@ -35,7 +35,7 @@ class NBAPredictor:
             'Home_Win_Rate', 'Away_Win_Rate',
             'Win_Rate_Diff', 'Point_Diff_Ratio', 'Rest_Advantage',
             'Streak_Advantage', 'Recent_Form_Ratio', 'Win_Rate_Rest_Interaction',
-            'Streak_Form_Interaction'
+            'Streak_Form_Interaction', 'Avg_Total_Roll5'
         ]
         
         # Initialize base models for ensemble with optimized parameters
@@ -44,13 +44,6 @@ class NBAPredictor:
             max_depth=12,
             min_samples_split=5,
             min_samples_leaf=2,
-            random_state=42
-        )
-        
-        self.lr_classifier = LogisticRegression(
-            C=0.8,
-            max_iter=2000,
-            class_weight='balanced',
             random_state=42
         )
         
@@ -68,16 +61,9 @@ class NBAPredictor:
             learning_rate=0.03,
             subsample=0.8,
             colsample_bytree=0.8,
-            random_state=42
-        )
-        
-        self.lgb_classifier = lgb.LGBMClassifier(
-            n_estimators=300,
-            max_depth=8,
-            learning_rate=0.03,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            random_state=42
+            random_state=42,
+            use_label_encoder=False,
+            eval_metric='logloss'
         )
     
     def prepare_features(self, games_df):
@@ -225,6 +211,24 @@ class NBAPredictor:
         df['Win_Rate_Rest_Interaction'] = df['Win_Rate_Diff'] * df['Rest_Advantage']
         df['Streak_Form_Interaction'] = df['Streak_Advantage'] * df['Recent_Form_Ratio']
         
+        # --- New Totals Features ---
+        # Calculate rolling totals for both home and away teams over the last 5 games
+        df['Home_Total_Roll5'] = df['Home_Points_Scored_Roll5'] + df['Home_Points_Allowed_Roll5']
+        df['Away_Total_Roll5'] = df['Away_Points_Scored_Roll5'] + df['Away_Points_Allowed_Roll5']
+        # Create an average total feature from both teams
+        df['Avg_Total_Roll5'] = (df['Home_Total_Roll5'] + df['Away_Total_Roll5']) / 2
+
+        # Optionally, log statistics for the new feature
+        new_feature = 'Avg_Total_Roll5'
+        stats = df[new_feature].describe()
+        logging.info(f"\n{new_feature}:")
+        logging.info(f"  Mean: {stats['mean']:.3f}")
+        logging.info(f"  Std: {stats['std']:.3f}")
+        logging.info(f"  Min: {stats['min']:.3f}")
+        logging.info(f"  Max: {stats['max']:.3f}")
+        non_zero = (df[new_feature] != 0).sum()
+        logging.info(f"  Non-zero values: {non_zero} ({(non_zero/len(df))*100:.1f}%)")
+        
         # Ensure all required feature columns exist
         for col in self.feature_columns:
             if col not in df.columns:
@@ -286,46 +290,19 @@ class NBAPredictor:
         cv_accuracies = self.cross_validate_moneyline(X_train_scaled, y_ml_train, n_splits=5)
         
         # Train base models separately
-        logging.info("Training enhanced moneyline models...")
-        # TODO: Consider implementing a more robust cross-validation strategy (e.g., StratifiedKFold or GridSearchCV) to ensure no leakage in moneyline classifier training.
+        logging.info("Training enhanced moneyline ensemble model...")
         self.moneyline_model = VotingClassifier(
             estimators=[
                 ('rf', self.rf_classifier),
-                ('lr', self.lr_classifier),
-                ('svm', self.svm_classifier)
+                ('svm', self.svm_classifier),
+                ('xgb', self.xgb_classifier)
             ],
             voting='soft',
-            weights=[2, 1, 1]
+            weights=[2, 1, 2]  # Increased weights for RF and XGB
         )
         self.moneyline_model.fit(X_train_scaled, y_ml_train)
         
-        # Train XGBoost
-        self.xgb_classifier.fit(X_train_scaled, y_ml_train)
-        
-        # Train LightGBM
-        self.lgb_classifier.fit(X_train_scaled, y_ml_train)
-        
-        # Patch decision tree classifiers in the moneyline model to ensure 'monotonic_cst' attribute exists.
-        for estimator in self.moneyline_model.estimators_:
-            if not hasattr(estimator, 'monotonic_cst'):
-                estimator.monotonic_cst = None
-
-        # Get predictions from all models
-        sklearn_proba = self.moneyline_model.predict_proba(X_test_scaled)
-        xgb_proba = self.xgb_classifier.predict_proba(X_test_scaled)
-        lgb_proba = self.lgb_classifier.predict_proba(X_test_scaled)
-        
-        # Weighted average of probabilities
-        ensemble_proba = (2*sklearn_proba + 2*xgb_proba + 2*lgb_proba) / 6
-        y_ml_pred = (ensemble_proba[:, 1] > 0.5).astype(int)
-        
-        # Evaluate moneyline model
-        ml_accuracy = accuracy_score(y_ml_test, y_ml_pred)
-        logging.info(f"Enhanced ensemble moneyline model accuracy: {ml_accuracy:.3f}")
-        logging.info("\nMoneyline Classification Report:")
-        logging.info(classification_report(y_ml_test, y_ml_pred))
-        
-        # Train enhanced spread model with XGBoost
+        # Train enhanced spread model using XGBoost with early stopping:
         logging.info("Training enhanced spread model...")
         self.spread_model = xgb.XGBRegressor(
             n_estimators=300,
@@ -337,24 +314,34 @@ class NBAPredictor:
             reg_lambda=1.0,
             random_state=42
         )
-        self.spread_model.fit(X_train_scaled, y_spread_train)
-        
-        # Evaluate spread model
+        self.spread_model.fit(
+            X_train_scaled, y_spread_train,
+            early_stopping_rounds=20,
+            eval_set=[(X_test_scaled, y_spread_test)],
+            verbose=False
+        )
         y_spread_pred = self.spread_model.predict(X_test_scaled)
         spread_rmse = np.sqrt(mean_squared_error(y_spread_test, y_spread_pred))
         logging.info(f"Enhanced spread model RMSE: {spread_rmse:.3f}")
         
-        # Train enhanced totals model with LightGBM
-        logging.info("Training enhanced totals model...")
-        self.totals_model = lgb.LGBMRegressor(
-            n_estimators=300,
-            max_depth=6,
-            learning_rate=0.03,
-            subsample=0.8,
-            colsample_bytree=0.8,
+        # Train totals model using XGBoost with early stopping
+        logging.info("Training enhanced totals model with XGBoost...")
+        self.totals_model = xgb.XGBRegressor(
+            n_estimators=500,
+            max_depth=8,
+            learning_rate=0.02,
+            subsample=0.9,
+            colsample_bytree=0.9,
+            reg_alpha=0.1,
+            reg_lambda=1.0,
             random_state=42
         )
-        self.totals_model.fit(X_train_scaled, y_totals_train)
+        self.totals_model.fit(
+            X_train_scaled, y_totals_train,
+            early_stopping_rounds=20,
+            eval_set=[(X_test_scaled, y_totals_test)],
+            verbose=False
+        )
         
         # Evaluate totals model
         y_totals_pred = self.totals_model.predict(X_test_scaled)
@@ -365,7 +352,7 @@ class NBAPredictor:
         self.save_models()
         
         return {
-            'moneyline_accuracy': ml_accuracy,
+            'moneyline_accuracy': cv_accuracies[-1] if cv_accuracies else 0,
             'spread_rmse': spread_rmse,
             'totals_rmse': totals_rmse
         }
@@ -377,7 +364,6 @@ class NBAPredictor:
         joblib.dump(self.totals_model, 'models/totals_model.joblib')
         joblib.dump(self.scaler, 'models/scaler.joblib')
         joblib.dump(self.xgb_classifier, 'models/xgb_classifier.joblib')
-        joblib.dump(self.lgb_classifier, 'models/lgb_classifier.joblib')
         logging.info("Models saved successfully")
     
     def load_models(self):
@@ -388,7 +374,6 @@ class NBAPredictor:
             self.totals_model = joblib.load('models/totals_model.joblib')
             self.scaler = joblib.load('models/scaler.joblib')
             self.xgb_classifier = joblib.load('models/xgb_classifier.joblib')
-            self.lgb_classifier = joblib.load('models/lgb_classifier.joblib')
             logging.info("Models loaded successfully")
             return True
         except Exception as e:
@@ -408,13 +393,8 @@ class NBAPredictor:
         predictions['Away_Team'] = games_df['Away_Team']
         predictions['Date'] = games_df['Date']
         
-        # Get predictions from all models
-        sklearn_proba = self.moneyline_model.predict_proba(X_scaled)
-        xgb_proba = self.xgb_classifier.predict_proba(X_scaled)
-        lgb_proba = self.lgb_classifier.predict_proba(X_scaled)
-        
-        # Weighted average of probabilities
-        ensemble_proba = (2*sklearn_proba + 2*xgb_proba + 2*lgb_proba) / 6
+        # Get predictions from ensemble model directly
+        ensemble_proba = self.moneyline_model.predict_proba(X_scaled)
         predictions['Home_Win_Prob'] = ensemble_proba[:, 1]
         predictions['Away_Win_Prob'] = ensemble_proba[:, 0]
         predictions['Moneyline_Pick'] = (predictions['Home_Win_Prob'] > 0.5).astype(int)
@@ -426,7 +406,8 @@ class NBAPredictor:
             -abs(raw_spread),  # Home team favored (negative spread)
             abs(raw_spread)    # Away team favored (positive spread)
         )
-        predictions['Predicted_Total'] = self.totals_model.predict(X_scaled)
+        # Use ensemble: average predictions from both the LightGBM and XGBoost totals models
+        predictions['Predicted_Total'] = (self.totals_model.predict(X_scaled))
         
         # First Half predictions (based on historical patterns)
         predictions['First_Half_Total'] = predictions['Predicted_Total'] * 0.52
@@ -618,18 +599,21 @@ class NBAPredictor:
         tscv = TimeSeriesSplit(n_splits=n_splits)
         fold_accuracies = []
         fold = 1
+        
+        # Convert y to numpy array to avoid index issues
+        y_np = y.to_numpy() if isinstance(y, pd.Series) else y
+        
         for train_idx, test_idx in tscv.split(X):
             X_train_cv, X_test_cv = X[train_idx], X[test_idx]
-            y_train_cv, y_test_cv = y[train_idx], y[test_idx]
+            y_train_cv, y_test_cv = y_np[train_idx], y_np[test_idx]
             # Create a new VotingClassifier instance with the same parameters
             model = VotingClassifier(
                 estimators=[
                     ('rf', self.rf_classifier),
-                    ('lr', self.lr_classifier),
                     ('svm', self.svm_classifier)
                 ],
                 voting='soft',
-                weights=[2, 1, 1]
+                weights=[2, 1]
             )
             model.fit(X_train_cv, y_train_cv)
             y_pred_cv = model.predict(X_test_cv)
