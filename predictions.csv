@@ -1,85 +1,133 @@
 Home_Team,Away_Team,Date,Home_Win_Prob,Away_Win_Prob,Moneyline_Pick,Predicted_Spread,Predicted_Total,First_Half_Total,First_Half_Spread,Avg_Quarter_Points,First_Quarter_Total,First_Quarter_Spread,Moneyline_Confidence,Formatted_Predictions,Game,Value_Rating
-Los Angeles Clippers,Los Angeles Lakers,2025-02-04,0.1666721160927487,0.8333278758357889,0,2.8345203,227.48808033933926,118.29380177645642,1.3605697,56.872020084834816,54.59713928144142,1.2755342,0.8333278758357889,"Game: Los Angeles Lakers @ Los Angeles Clippers
-Moneyline: Los Angeles Lakers ML (83.3% confidence)
-Win Probabilities: Los Angeles Clippers: 16.7%, Los Angeles Lakers: 83.3%
+Oklahoma City Thunder,Phoenix Suns,2025-02-05,0.15754209530751176,0.8424579090386602,0,1.5391508,225.9142482908403,117.47540911123696,0.73879236,56.478562072710076,54.219419589801674,0.69261783,0.8424579090386602,"Game: Phoenix Suns @ Oklahoma City Thunder
+Moneyline: Phoenix Suns ML (84.2% confidence)
+Win Probabilities: Oklahoma City Thunder: 15.8%, Phoenix Suns: 84.2%
 Full Game:
-  - Spread: Los Angeles Clippers +2.8
-  - Total: 227.5
+  - Spread: Oklahoma City Thunder +1.5
+  - Total: 225.9
 First Half:
-  - Spread: Los Angeles Clippers +1.4
-  - Total: 118.3
+  - Spread: Oklahoma City Thunder +0.7
+  - Total: 117.5
 First Quarter:
-  - Spread: Los Angeles Clippers +1.3
-  - Total: 54.6",Los Angeles Lakers @ Los Angeles Clippers,0.611097110998398
-Philadelphia 76ers,Dallas Mavericks,2025-02-04,0.15058936479812057,0.8494106395480515,0,8.769639,225.32589399239933,117.16946487604766,4.2094264,56.33147349809983,54.07821455817584,3.9463375,0.8494106395480515,"Game: Dallas Mavericks @ Philadelphia 76ers
-Moneyline: Dallas Mavericks ML (84.9% confidence)
-Win Probabilities: Philadelphia 76ers: 15.1%, Dallas Mavericks: 84.9%
+  - Spread: Oklahoma City Thunder +0.7
+  - Total: 54.2",Phoenix Suns @ Oklahoma City Thunder,0.6347140187338015
+Atlanta Hawks,San Antonio Spurs,2025-02-05,0.15683259310094633,0.8431674112452257,0,1.962821,222.71509567135212,115.8118497491031,0.94215405,55.67877391783803,53.45162296112451,0.8832694,0.8431674112452257,"Game: San Antonio Spurs @ Atlanta Hawks
+Moneyline: San Antonio Spurs ML (84.3% confidence)
+Win Probabilities: Atlanta Hawks: 15.7%, San Antonio Spurs: 84.3%
 Full Game:
-  - Spread: Philadelphia 76ers +8.8
-  - Total: 225.3
+  - Spread: Atlanta Hawks +2.0
+  - Total: 222.7
 First Half:
-  - Spread: Philadelphia 76ers +4.2
-  - Total: 117.2
+  - Spread: Atlanta Hawks +0.9
+  - Total: 115.8
 First Quarter:
-  - Spread: Philadelphia 76ers +3.9
-  - Total: 54.1",Dallas Mavericks @ Philadelphia 76ers,0.6529448485066358
-Brooklyn Nets,Houston Rockets,2025-02-04,0.15504300366470983,0.8449570006814623,0,5.064639,227.90523439206117,118.51072188387181,2.4310267,56.976308598015294,54.69725625409468,2.2790875,0.8449570006814623,"Game: Houston Rockets @ Brooklyn Nets
-Moneyline: Houston Rockets ML (84.5% confidence)
-Win Probabilities: Brooklyn Nets: 15.5%, Houston Rockets: 84.5%
+  - Spread: Atlanta Hawks +0.9
+  - Total: 53.5",San Antonio Spurs @ Atlanta Hawks,0.6365646670483922
+Charlotte Hornets,Milwaukee Bucks,2025-02-05,0.137565857827162,0.8624341465190101,0,10.389757,229.27852636150166,119.22483370798086,4.9870834,57.319631590375415,55.0268463267604,4.6753907,0.8624341465190101,"Game: Milwaukee Bucks @ Charlotte Hornets
+Moneyline: Milwaukee Bucks ML (86.2% confidence)
+Win Probabilities: Charlotte Hornets: 13.8%, Milwaukee Bucks: 86.2%
 Full Game:
-  - Spread: Brooklyn Nets +5.1
-  - Total: 227.9
+  - Spread: Charlotte Hornets +10.4
+  - Total: 229.3
 First Half:
-  - Spread: Brooklyn Nets +2.4
-  - Total: 118.5
+  - Spread: Charlotte Hornets +5.0
+  - Total: 119.2
 First Quarter:
+  - Spread: Charlotte Hornets +4.7
+  - Total: 55.0",Milwaukee Bucks @ Charlotte Hornets,0.6876662802863144
+Detroit Pistons,Cleveland Cavaliers,2025-02-05,0.17352015595074524,0.8264798359777924,0,4.787296,239.3082354476173,124.44028243276101,2.2979019,59.82705886190433,57.43397650742815,2.154283,0.8264798359777924,"Game: Cleveland Cavaliers @ Detroit Pistons
+Moneyline: Cleveland Cavaliers ML (82.6% confidence)
+Win Probabilities: Detroit Pistons: 17.4%, Cleveland Cavaliers: 82.6%
+Full Game:
+  - Spread: Detroit Pistons +4.8
+  - Total: 239.3
+First Half:
+  - Spread: Detroit Pistons +2.3
+  - Total: 124.4
+First Quarter:
+  - Spread: Detroit Pistons +2.2
+  - Total: 57.4",Cleveland Cavaliers @ Detroit Pistons,0.5936238101737524
+Brooklyn Nets,Washington Wizards,2025-02-05,0.14512210522878435,0.8548778991173878,0,2.2639313,229.1278942575243,119.14650501391264,1.086687,57.281973564381076,54.99069462180583,1.018769,0.8548778991173878,"Game: Washington Wizards @ Brooklyn Nets
+Moneyline: Washington Wizards ML (85.5% confidence)
+Win Probabilities: Brooklyn Nets: 14.5%, Washington Wizards: 85.5%
+Full Game:
   - Spread: Brooklyn Nets +2.3
-  - Total: 54.7",Houston Rockets @ Brooklyn Nets,0.641242427812178
-Cleveland Cavaliers,Boston Celtics,2025-02-04,0.16480545505812286,0.8351945368704149,0,3.210339,230.17947169990893,119.69332528395265,1.5409627,57.54486792497723,55.24307320797814,1.4446526,0.8351945368704149,"Game: Boston Celtics @ Cleveland Cavaliers
-Moneyline: Boston Celtics ML (83.5% confidence)
-Win Probabilities: Cleveland Cavaliers: 16.5%, Boston Celtics: 83.5%
-Full Game:
-  - Spread: Cleveland Cavaliers +3.2
-  - Total: 230.2
-First Half:
-  - Spread: Cleveland Cavaliers +1.5
-  - Total: 119.7
-First Quarter:
-  - Spread: Cleveland Cavaliers +1.4
-  - Total: 55.2",Boston Celtics @ Cleveland Cavaliers,0.61589582857792
-Toronto Raptors,New York Knicks,2025-02-04,0.1666882931740115,0.8333116987545263,0,3.7264972,237.6646066573914,123.58559546184354,1.7887186,59.41615166434785,57.03950559777393,1.6769236,0.8333116987545263,"Game: New York Knicks @ Toronto Raptors
-Moneyline: New York Knicks ML (83.3% confidence)
-Win Probabilities: Toronto Raptors: 16.7%, New York Knicks: 83.3%
-Full Game:
-  - Spread: Toronto Raptors +3.7
-  - Total: 237.7
-First Half:
-  - Spread: Toronto Raptors +1.8
-  - Total: 123.6
-First Quarter:
-  - Spread: Toronto Raptors +1.7
-  - Total: 57.0",New York Knicks @ Toronto Raptors,0.6110555907872091
-Chicago Bulls,Miami Heat,2025-02-04,0.15831664779810642,0.8416833565480656,0,3.1184068,229.07500216954656,119.11900112816421,1.4968352,57.26875054238664,54.978000520691175,1.403283,0.8416833565480656,"Game: Miami Heat @ Chicago Bulls
-Moneyline: Miami Heat ML (84.2% confidence)
-Win Probabilities: Chicago Bulls: 15.8%, Miami Heat: 84.2%
-Full Game:
-  - Spread: Chicago Bulls +3.1
   - Total: 229.1
 First Half:
-  - Spread: Chicago Bulls +1.5
+  - Spread: Brooklyn Nets +1.1
   - Total: 119.1
 First Quarter:
-  - Spread: Chicago Bulls +1.4
-  - Total: 55.0",Miami Heat @ Chicago Bulls,0.632696223691257
-Portland Trail Blazers,Indiana Pacers,2025-02-04,0.16996489829759923,0.8300350936309385,0,6.9732485,239.45459961103066,124.51639179773595,3.3471591,59.863649902757665,57.469103906647355,3.1379616,0.8300350936309385,"Game: Indiana Pacers @ Portland Trail Blazers
-Moneyline: Indiana Pacers ML (83.0% confidence)
-Win Probabilities: Portland Trail Blazers: 17.0%, Indiana Pacers: 83.0%
+  - Spread: Brooklyn Nets +1.0
+  - Total: 55.0",Washington Wizards @ Brooklyn Nets,0.6674299961624713
+Philadelphia 76ers,Miami Heat,2025-02-05,0.153802101166031,0.846197903180141,0,1.356272,224.24055055661134,116.6050862894379,0.6510105,56.060137639152835,53.817732133586716,0.61032236,0.846197903180141,"Game: Miami Heat @ Philadelphia 76ers
+Moneyline: Miami Heat ML (84.6% confidence)
+Win Probabilities: Philadelphia 76ers: 15.4%, Miami Heat: 84.6%
 Full Game:
-  - Spread: Portland Trail Blazers +7.0
-  - Total: 239.5
+  - Spread: Philadelphia 76ers +1.4
+  - Total: 224.2
 First Half:
-  - Spread: Portland Trail Blazers +3.3
-  - Total: 124.5
+  - Spread: Philadelphia 76ers +0.7
+  - Total: 116.6
 First Quarter:
-  - Spread: Portland Trail Blazers +3.1
-  - Total: 57.5",Indiana Pacers @ Portland Trail Blazers,0.6026695690251502
+  - Spread: Philadelphia 76ers +0.6
+  - Total: 53.8",Miami Heat @ Philadelphia 76ers,0.6444942634185791
+Toronto Raptors,Memphis Grizzlies,2025-02-05,0.1575161713403733,0.8424838330057988,0,2.7283778,234.14714845371003,121.75651719592922,1.3096213,58.53678711342751,56.195315628890405,1.22777,0.8424838330057988,"Game: Memphis Grizzlies @ Toronto Raptors
+Moneyline: Memphis Grizzlies ML (84.2% confidence)
+Win Probabilities: Toronto Raptors: 15.8%, Memphis Grizzlies: 84.2%
+Full Game:
+  - Spread: Toronto Raptors +2.7
+  - Total: 234.1
+First Half:
+  - Spread: Toronto Raptors +1.3
+  - Total: 121.8
+First Quarter:
+  - Spread: Toronto Raptors +1.2
+  - Total: 56.2",Memphis Grizzlies @ Toronto Raptors,0.6347815991933974
+Minnesota Timberwolves,Chicago Bulls,2025-02-05,0.1573116988822755,0.8426883054638966,0,2.1528687,223.14185784812014,116.03376608102248,1.0333769,55.785464462030035,53.55404588354883,0.9687909,0.8426883054638966,"Game: Chicago Bulls @ Minnesota Timberwolves
+Moneyline: Chicago Bulls ML (84.3% confidence)
+Win Probabilities: Minnesota Timberwolves: 15.7%, Chicago Bulls: 84.3%
+Full Game:
+  - Spread: Minnesota Timberwolves +2.2
+  - Total: 223.1
+First Half:
+  - Spread: Minnesota Timberwolves +1.0
+  - Total: 116.0
+First Quarter:
+  - Spread: Minnesota Timberwolves +1.0
+  - Total: 53.6",Chicago Bulls @ Minnesota Timberwolves,0.6353147363253483
+Denver Nuggets,New Orleans Pelicans,2025-02-05,0.1536633125592722,0.8463366917868999,0,1.855011,230.18843239156027,119.69798484361134,0.89040524,57.54710809789007,55.245223773974466,0.83475494,0.8463366917868999,"Game: New Orleans Pelicans @ Denver Nuggets
+Moneyline: New Orleans Pelicans ML (84.6% confidence)
+Win Probabilities: Denver Nuggets: 15.4%, New Orleans Pelicans: 84.6%
+Full Game:
+  - Spread: Denver Nuggets +1.9
+  - Total: 230.2
+First Half:
+  - Spread: Denver Nuggets +0.9
+  - Total: 119.7
+First Quarter:
+  - Spread: Denver Nuggets +0.8
+  - Total: 55.2",New Orleans Pelicans @ Denver Nuggets,0.6448583858907995
+Utah Jazz,Golden State Warriors,2025-02-05,0.15848428366828973,0.8415157206778824,0,4.3149056,227.78567508390282,118.44855104362946,2.0711546,56.946418770975704,54.668562020136676,1.9417075,0.8415157206778824,"Game: Golden State Warriors @ Utah Jazz
+Moneyline: Golden State Warriors ML (84.2% confidence)
+Win Probabilities: Utah Jazz: 15.8%, Golden State Warriors: 84.2%
+Full Game:
+  - Spread: Utah Jazz +4.3
+  - Total: 227.8
+First Half:
+  - Spread: Utah Jazz +2.1
+  - Total: 118.4
+First Quarter:
+  - Spread: Utah Jazz +1.9
+  - Total: 54.7",Golden State Warriors @ Utah Jazz,0.6322598611568547
+Sacramento Kings,Orlando Magic,2025-02-05,0.1440046996684228,0.8559953046777492,0,3.278854,229.2179542398896,119.1933362047426,1.5738498,57.3044885599724,55.0123090175735,1.4754843,0.8559953046777492,"Game: Orlando Magic @ Sacramento Kings
+Moneyline: Orlando Magic ML (85.6% confidence)
+Win Probabilities: Sacramento Kings: 14.4%, Orlando Magic: 85.6%
+Full Game:
+  - Spread: Sacramento Kings +3.3
+  - Total: 229.2
+First Half:
+  - Spread: Sacramento Kings +1.6
+  - Total: 119.2
+First Quarter:
+  - Spread: Sacramento Kings +1.5
+  - Total: 55.0",Orlando Magic @ Sacramento Kings,0.6704066763489187
