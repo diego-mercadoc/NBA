@@ -757,11 +757,10 @@ class ModelTuner:
             if X is None or y_moneyline is None or not self.validate_features(X, feature_names):
                 return False
 
-            # 3) Dictionary to store models and scores
+            # 3) Dictionary to store models and scores separately
             models_scores = {}
             best_models = {}
 
-            # 4) Tune each model
             tuning_configs = {
                 'random_forest': {
                     'func': self.tune_random_forest,
@@ -782,8 +781,7 @@ class ModelTuner:
 
             for model_type, config in tuning_configs.items():
                 logging.info(f"\nTuning {model_type}...")
-                
-                # Get previous score if exists
+                # Retrieve previous score if available
                 previous_score = 0
                 old_path = f"models/{model_type}_model.joblib"
                 if os.path.exists(old_path):
@@ -794,17 +792,11 @@ class ModelTuner:
                     except Exception:
                         logging.info(f"No previous score found for {model_type}")
 
-                # Tune model with appropriate target and configuration
-                if config['is_classification']:
-                    best_estimator, best_score = config['func'](X, config['target'])
-                else:
-                    best_estimator, best_score = config['func'](X, config['target'], is_classification=False)
-
+                best_estimator, best_score = config['func'](X, config['target'], is_classification=config['is_classification'])
                 if best_estimator is None:
                     logging.warning(f"Skipping {model_type} due to tuning failure")
                     continue
 
-                # Validate performance
                 if not self.validate_model_performance(best_estimator, X, config['target'], model_type):
                     logging.warning(f"Skipping {model_type} due to validation failure")
                     continue
@@ -813,24 +805,18 @@ class ModelTuner:
                     logging.warning(f"{model_type} performance validation failed")
                     continue
 
-                # Store model and score
                 models_scores[model_type] = best_score
                 best_models[model_type] = best_estimator
 
-                # Save model
                 if self.save_model(best_estimator, model_type):
                     logging.info(f"New {model_type} model saved")
                 else:
                     logging.warning(f"Failed to save {model_type} model")
 
-            # 5) Calculate ensemble weights for moneyline models only
-            moneyline_scores = {k: v for k, v in models_scores.items() 
-                              if k in ['random_forest', 'xgboost_moneyline']}
-            
+            # Calculate ensemble weights for moneyline models only
+            moneyline_scores = {k: v for k, v in models_scores.items() if k in ['random_forest', 'xgboost_moneyline']}
             if len(moneyline_scores) > 0:
                 weights = self.calculate_ensemble_weights(moneyline_scores)
-                
-                # Save weights
                 weights_path = 'models/ensemble_weights.json'
                 try:
                     with open(weights_path, 'w') as f:
