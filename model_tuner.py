@@ -469,36 +469,41 @@ class ModelTuner:
 
     def custom_cv_iterator(self, X, y, cv):
         """
-        A custom cross-validation iterator that yields (train_idx, test_idx) along with
-        a corresponding eval_set with reset indices. This ensures proper index alignment
-        for XGBoost's early stopping mechanism.
-
+        Yields (train_index, test_index) along with a corresponding eval_set
+        where both the training and validation DataFrames/Series have reset indices.
+        
+        This iterator ensures that XGBoost's early stopping gets a valid, sequential eval_set
+        while preserving DataFrame column names.
+        
         Parameters
         ----------
         X : pd.DataFrame or np.ndarray
-            Training data
+            Feature DataFrame or array.
         y : pd.Series or np.ndarray
-            Target values
-        cv : TimeSeriesSplit or other CV splitter
-            Cross-validation splitter object
-
+            Target values.
+        cv : cross-validation splitter (e.g., TimeSeriesSplit)
+            The CV splitter that yields (train_idx, test_idx) pairs.
+        
         Yields
         ------
-        tuple : ((train_idx, test_idx), [(X_train, y_train), (X_val, y_val)])
-            Train/test indices and corresponding data with reset indices
+        tuple : ((train_index, test_index), [(X_train, y_train), (X_val, y_val)])
+            Where:
+            - train_index, test_index are the original indices
+            - X_train, X_val are DataFrames with reset indices (0-based)
+            - y_train, y_val are Series with reset indices (0-based)
         """
-        # Convert to DataFrame/Series once at the start
-        X_df = pd.DataFrame(X) if not isinstance(X, pd.DataFrame) else X
-        y_series = pd.Series(y) if not isinstance(y, pd.Series) else y
+        # Convert to pandas objects once at the start
+        X_df = X if isinstance(X, pd.DataFrame) else pd.DataFrame(X)
+        y_series = y if isinstance(y, pd.Series) else pd.Series(y)
         
         for train_index, test_index in cv.split(X_df, y_series):
-            # Extract train/validation sets
-            X_train = X_df.iloc[train_index].copy()  # Use copy to ensure independent indices
+            # Extract train/validation sets with independent indices
+            X_train = X_df.iloc[train_index].copy()
             X_val = X_df.iloc[test_index].copy()
             y_train = y_series.iloc[train_index].copy()
             y_val = y_series.iloc[test_index].copy()
             
-            # Reset indices to ensure proper alignment
+            # Reset indices to ensure proper alignment, using inplace for efficiency
             X_train.reset_index(drop=True, inplace=True)
             X_val.reset_index(drop=True, inplace=True)
             y_train.reset_index(drop=True, inplace=True)
@@ -513,9 +518,9 @@ class ModelTuner:
         
         Parameters
         ----------
-        X : array-like of shape (n_samples, n_features)
-            Training data
-        y : array-like of shape (n_samples,)
+        X : pd.DataFrame
+            Training data features
+        y : pd.Series
             Target values
         is_classification : bool, default=True
             Whether to tune for classification (moneyline) or regression (totals)
@@ -537,10 +542,10 @@ class ModelTuner:
                 'max_depth': [6, 7, 8, 9],
                 'learning_rate': [0.01, 0.05, 0.1],
                 'subsample': [0.8, 0.9, 1.0],
-                'min_child_weight': [1, 3, 5],
+                'colsample_bytree': [0.8, 0.9, 1.0],
                 'reg_alpha': [0, 0.1, 0.5],
                 'reg_lambda': [0.1, 0.5, 1.0],
-                'colsample_bytree': [0.8, 0.9, 1.0]
+                'min_child_weight': [1, 3, 5]
             }
             
             # Initialize base model with early stopping
@@ -562,9 +567,9 @@ class ModelTuner:
                 )
                 scoring = 'neg_root_mean_squared_error'
             
-            # Convert X to DataFrame and y to Series if they aren't already
-            X_df = pd.DataFrame(X) if not isinstance(X, pd.DataFrame) else X
-            y_series = pd.Series(y) if not isinstance(y, pd.Series) else y
+            # Ensure X and y are pandas DataFrame/Series
+            X_df = X if isinstance(X, pd.DataFrame) else pd.DataFrame(X)
+            y_series = y if isinstance(y, pd.Series) else pd.Series(y)
             
             # Create custom CV iterator with reset indices
             cv_iter = self.custom_cv_iterator(X_df, y_series, tscv)
@@ -594,7 +599,7 @@ class ModelTuner:
             
             # Validate performance
             model_type = 'xgboost_moneyline' if is_classification else 'xgboost_totals'
-            if not self.validate_model_performance(search.best_estimator_, X, y, model_type):
+            if not self.validate_model_performance(search.best_estimator_, X_df, y_series, model_type):
                 logging.warning(f"{model_type} model failed performance validation")
                 return None, None
             
