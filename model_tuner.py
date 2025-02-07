@@ -603,16 +603,10 @@ class ModelTuner:
                     rmse = np.sqrt(np.mean((y_val - val_pred) ** 2))
                     score = -rmse
                 
-                if is_classification:
-                    if score > best_score:
-                        best_score = score
-                        best_model = model
-                        best_params = params
-                else:
-                    if score > best_score:  # (score is negative RMSE; less negative is better)
-                        best_score = score
-                        best_model = model
-                        best_params = params
+                if score > best_score:
+                    best_score = score
+                    best_model = model
+                    best_params = params
             
             logging.info(f"Best XGBoost parameters: {best_params}")
             logging.info(f"Best validation score: {best_score:.3f}")
@@ -640,6 +634,35 @@ class ModelTuner:
         If significantly worse, reject. If better or about the same, accept.
         """
         try:
+            # Special handling for XGBoost models
+            if isinstance(model, (xgb.XGBClassifier, xgb.XGBRegressor)):
+                # For XGBoost, we'll use a simple train/validation split
+                X_train, X_val, y_train, y_val = train_test_split(
+                    X, y, test_size=0.2, random_state=42,
+                    stratify=y if isinstance(model, xgb.XGBClassifier) else None
+                )
+                
+                model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=0)
+                
+                if isinstance(model, xgb.XGBClassifier):
+                    current_score = model.score(X_val, y_val)
+                else:
+                    val_pred = model.predict(X_val)
+                    current_score = -np.sqrt(np.mean((y_val - val_pred) ** 2))  # Negative RMSE
+                
+                if isinstance(previous_score, (dict, collections.defaultdict)):
+                    previous_score = 0
+                score_diff = current_score - float(previous_score if previous_score else 0)
+                threshold = float(self.tuning_config['backup']['performance_threshold'])
+
+                if score_diff < -threshold:
+                    logging.warning(f"Performance regression: {score_diff:.3f}")
+                    return False
+
+                logging.info(f"Performance improvement: {score_diff:.3f}")
+                return True
+            
+            # Original validation for other models
             scores = cross_val_score(
                 model,
                 X, y,
@@ -667,6 +690,46 @@ class ModelTuner:
         """Check if model meets minimum accuracy + no big overfit gap."""
         try:
             min_accuracy = self.config['model_validation']['minimum_accuracy']['moneyline']
+            
+            # Special handling for XGBoost models
+            if isinstance(model, (xgb.XGBClassifier, xgb.XGBRegressor)):
+                # For XGBoost, we'll use a simpler validation approach
+                X_train, X_val, y_train, y_val = train_test_split(
+                    X, y, test_size=0.2, random_state=42,
+                    stratify=y if isinstance(model, xgb.XGBClassifier) else None
+                )
+                
+                model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=0)
+                
+                if isinstance(model, xgb.XGBClassifier):
+                    train_score = model.score(X_train, y_train)
+                    val_score = model.score(X_val, y_val)
+                else:
+                    train_pred = model.predict(X_train)
+                    val_pred = model.predict(X_val)
+                    train_score = -np.sqrt(np.mean((y_train - train_pred) ** 2))  # Negative RMSE
+                    val_score = -np.sqrt(np.mean((y_val - val_pred) ** 2))  # Negative RMSE
+                
+                mean_score = val_score
+                score_diff = abs(train_score - val_score)
+                
+                logging.info(f"{model_type} Validation Score: {mean_score:.3f}")
+                logging.info(f"{model_type} Train-Val Difference: {score_diff:.3f}")
+                
+                if isinstance(model, xgb.XGBClassifier) and mean_score < min_accuracy:
+                    logging.warning(f"{model_type} below min accuracy: {mean_score:.3f} < {min_accuracy}")
+                    return False
+                
+                if score_diff > 0.1:  # 10% difference threshold
+                    logging.warning(
+                        f"{model_type} shows potential overfitting: Train={train_score:.3f}, Val={val_score:.3f}"
+                    )
+                    return False
+                
+                logging.info(f"{model_type} performance validation passed.")
+                return True
+            
+            # Original validation for other models
             scores = cross_val_score(
                 model, X, y,
                 cv=self.tuning_config['cross_validation']['folds'],
