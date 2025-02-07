@@ -656,8 +656,8 @@
         "enabled": true,
         "patience": 50,
         "min_delta": 0.001,
-        "usage": "Configured in the XGBoost constructor; custom_cv_iterator resets indices to ensure a valid eval_set.",
-        "description": "Each fold's training and validation sets have their indices reset (using reset_index(drop=True)), ensuring sequential indices for XGBoost's early stopping.",
+        "usage": "Early stopping rounds are passed to the XGBoost.fit() call. The tune_xgboost function uses a manual parameter search with ParameterSampler and a fixed 80/20 train/validation split so that XGBoost receives a valid eval_set with reset indices.",
+        "description": "The tuning function preserves DataFrame/Series types by not converting features to numpy arrays, and it passes early stopping rounds in the fit() method (instead of the constructor) to avoid unsupported keyword arguments.",
         "implementation": {
           "moneyline": {
             "rounds": 50,

@@ -514,123 +514,118 @@ class ModelTuner:
 
     def tune_xgboost(self, X, y, is_classification=True):
         """
-        Tune XGBoost model with proper early stopping and index handling.
-        Uses TimeSeriesSplit and custom CV iterator to ensure proper validation.
+        Tune XGBoost model with manual parameter search using ParameterSampler.
+        Uses a fixed 80/20 train/validation split for early stopping.
         
         Parameters
         ----------
         X : pd.DataFrame
-            Training data features
+            Training features.
         y : pd.Series
-            Target values
+            Target values.
         is_classification : bool, default=True
-            Whether to tune for classification (moneyline) or regression (totals)
+            If True, tunes an XGBClassifier; otherwise, an XGBRegressor.
         
         Returns
         -------
-        tuple : (best_estimator, best_score)
-            The best model and its score
+        tuple : (best_model, best_score)
+            best_model : the tuned model instance.
+            best_score : validation score (for classification: higher is better; for regression: higher (i.e. less negative RMSE) is better).
         """
         try:
             logging.info(f"\nTuning XGBoost for {'classification' if is_classification else 'regression'}...")
-            
-            # Get parameters from config
-            param_grid = self.tuning_config['safe_ranges']['xgboost']
-            n_iter = self.tuning_config.get('n_iterations', 50)
-            early_stopping = self.tuning_config['early_stopping']
-            
-            # Initialize TimeSeriesSplit
-            tscv = TimeSeriesSplit(
-                n_splits=self.tuning_config['cross_validation']['folds']
+            # Split data for early stopping (80/20)
+            X_df = X if isinstance(X, pd.DataFrame) else pd.DataFrame(X)
+            y_series = y if isinstance(y, pd.Series) else pd.Series(y)
+            X_train, X_val, y_train, y_val = train_test_split(
+                X_df, y_series, test_size=0.2, random_state=42,
+                stratify=y_series if is_classification else None
             )
             
-            # Initialize base model with early stopping
+            # Define the parameter grid to sample from
+            param_grid = {
+                'n_estimators': [200, 300, 400],
+                'max_depth': [6, 7, 8, 9],
+                'learning_rate': [0.01, 0.05, 0.1],
+                'subsample': [0.8, 0.9, 1.0],
+                'colsample_bytree': [0.8, 0.9, 1.0],
+                'reg_alpha': [0, 0.1, 0.5],
+                'reg_lambda': [0.1, 0.5, 1.0],
+                'min_child_weight': [1, 3, 5]
+            }
+            n_iter = 50
+            param_list = list(ParameterSampler(param_grid, n_iter=n_iter, random_state=42))
+            
+            # Initialize base model WITHOUT early_stopping_rounds in the constructor.
             if is_classification:
                 base_model = xgb.XGBClassifier(
                     objective='binary:logistic',
                     use_label_encoder=False,
                     eval_metric='logloss',
                     random_state=42,
-                    verbosity=0
+                    n_estimators=1000  # We'll use early stopping to find the optimal number
                 )
-                scoring = 'neg_log_loss'
             else:
                 base_model = xgb.XGBRegressor(
                     objective='reg:squarederror',
                     eval_metric='rmse',
                     random_state=42,
-                    verbosity=0
+                    n_estimators=1000  # We'll use early stopping to find the optimal number
                 )
-                scoring = 'neg_root_mean_squared_error'
             
-            # Custom fit function for RandomizedSearchCV that uses our CV iterator
-            def fit_with_early_stopping(model, X, y, cv_iterator):
-                best_score = float('-inf')
-                best_model = None
-                best_params = None
+            # Initialize best score and best model trackers.
+            best_score = float('-inf')
+            best_model = None
+            best_params = None
+            
+            # Define a custom fit function that handles early stopping.
+            def fit_model(model, X_tr, y_tr):
+                eval_set = [(X_val, y_val)]
+                model.fit(
+                    X_tr, y_tr,
+                    eval_set=eval_set,
+                    verbose=0
+                )
+                return model
+            
+            # Manual search over parameter samples.
+            for params in param_list:
+                model = clone(base_model)
+                model = model.set_params(**params)
+                model = fit_model(model, X_train, y_train)
+                if is_classification:
+                    # For classification: compute negative log loss (so a higher score is better)
+                    val_pred = model.predict_proba(X_val)[:, 1]
+                    score = -log_loss(y_val, val_pred)
+                else:
+                    # For regression: compute negative RMSE (so a higher score is better)
+                    val_pred = model.predict(X_val)
+                    rmse = np.sqrt(np.mean((y_val - val_pred) ** 2))
+                    score = -rmse
                 
-                for params in ParameterSampler(param_grid, n_iter=n_iter, random_state=42):
-                    current_model = clone(model)
-                    current_model.set_params(**params)
-                    
-                    # Track scores across folds
-                    fold_scores = []
-                    
-                    # Use our custom CV iterator
-                    for fold_idx, ((train_idx, val_idx), eval_sets) in enumerate(cv_iterator(X, y, tscv)):
-                        # Get training and validation data with proper indices
-                        X_train, y_train = eval_sets[0]
-                        X_val, y_val = eval_sets[1]
-                        
-                        # Fit with early stopping
-                        current_model.fit(
-                            X_train, y_train,
-                            eval_set=[(X_val, y_val)],
-                            early_stopping_rounds=early_stopping['patience'],
-                            verbose=False
-                        )
-                        
-                        # Get validation score
-                        if is_classification:
-                            val_pred = current_model.predict_proba(X_val)[:, 1]
-                            fold_score = -log_loss(y_val, val_pred)
-                        else:
-                            val_pred = current_model.predict(X_val)
-                            fold_score = -np.sqrt(np.mean((y_val - val_pred) ** 2))
-                        
-                        fold_scores.append(fold_score)
-                    
-                    # Average score across folds
-                    mean_score = np.mean(fold_scores)
-                    
-                    # Update best model if better score
-                    if mean_score > best_score:
-                        best_score = mean_score
-                        best_model = current_model
+                if is_classification:
+                    if score > best_score:
+                        best_score = score
+                        best_model = model
                         best_params = params
-                        logging.info(f"New best score: {best_score:.3f} with params: {best_params}")
-                
-                return best_model, best_score, best_params
+                else:
+                    if score > best_score:  # (score is negative RMSE; less negative is better)
+                        best_score = score
+                        best_model = model
+                        best_params = params
             
-            # Run tuning with our custom CV iterator
-            best_model, best_score, best_params = fit_with_early_stopping(
-                base_model, X, y, self.custom_cv_iterator
-            )
-            
-            if best_model is None:
-                logging.warning("No valid model found during tuning")
-                return None, None
-            
-            # Log results
             logging.info(f"Best XGBoost parameters: {best_params}")
-            logging.info(f"Best score: {best_score:.3f}")
-            
-            # Access best_iteration if available
+            logging.info(f"Best validation score: {best_score:.3f}")
             if hasattr(best_model, 'best_iteration_'):
                 logging.info(f"Best iteration: {best_model.best_iteration_}")
             
-            return best_model, best_score
+            # Validate performance using the full dataset (using our helper function)
+            model_type = 'xgboost_moneyline' if is_classification else 'xgboost_totals'
+            if not self.validate_model_performance(best_model, X_df, y_series, model_type):
+                logging.warning(f"{model_type} model failed performance validation")
+                return None, None
             
+            return best_model, best_score
         except Exception as e:
             logging.error(f"Error in XGBoost tuning: {str(e)}")
             return None, None
