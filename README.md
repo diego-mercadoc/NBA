@@ -265,6 +265,7 @@ See requirements.txt for a complete list of dependencies.
 - Model performance may fluctuate during validation periods
 - High confidence threshold (90%+) reduces number of picks
 - Value ratings strictly enforced (minimum 0.70)
+- A monkey-patch is applied in nba_predictor.py to handle scikit-learn compatibility (adds _support_missing_values to DecisionTreeClassifier)
 
 ### Development Roadmap
 

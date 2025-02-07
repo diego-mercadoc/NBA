@@ -830,6 +830,8 @@ class ModelTuner:
                 }
             }
 
+            # Note: xgboost_totals is skipped if overfitting is detected (train-val gap > threshold).
+            # This ensures only well-performing models are included in the final ensemble.
             for prediction_type, config in xgb_configs.items():
                 model_name = config['model_name']
                 logging.info(f"\nTuning {model_name}...")

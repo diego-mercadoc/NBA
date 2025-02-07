@@ -401,6 +401,15 @@
             "Optimize model hyperparameters"
           ]
         }
+      },
+      "scikit_learn_compatibility": {
+        "status": "patched",
+        "description": "Added monkey-patch in nba_predictor.py to handle missing _support_missing_values attribute in DecisionTreeClassifier",
+        "resolution_date": "2025-02-06",
+        "resolution_type": "workaround",
+        "affected_components": ["RandomForestClassifier", "DecisionTreeClassifier"],
+        "patch_location": "nba_predictor.py (top of file)",
+        "alternative": "Use scikit-learn>=1.2.0"
       }
     }
   },

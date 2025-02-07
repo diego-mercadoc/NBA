@@ -1,3 +1,17 @@
+# --- BEGIN MONOTONIC PATCH ---
+import sklearn.tree
+
+# Check if DecisionTreeClassifier has the required attributes
+if not hasattr(sklearn.tree.DecisionTreeClassifier, '_support_missing_values'):
+    def _support_missing_values(self, X):
+        # Simply return False so that missing value support is not triggered.
+        return False
+    sklearn.tree.DecisionTreeClassifier._support_missing_values = _support_missing_values
+
+if not hasattr(sklearn.tree.DecisionTreeClassifier, 'monotonic_cst'):
+    sklearn.tree.DecisionTreeClassifier.monotonic_cst = None
+# --- END MONOTONIC PATCH ---
+
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split, GridSearchCV, RandomizedSearchCV
@@ -384,9 +398,14 @@ class NBAPredictor:
         """Generate predictions for games with enhanced ensemble"""
         X = self.prepare_features(games_df)
         if X.empty: # Handle empty DataFrame case
-             logging.warning("No features to predict on. Returning empty predictions DataFrame.")
+             logging.warning("No features to predict on. Returning empty DataFrame.")
              return pd.DataFrame()
         X_scaled = self.scaler.transform(X)
+
+        # Add additional safety check for scaled features
+        if X_scaled.shape[0] == 0:
+            logging.warning("No features available for prediction - returning empty DataFrame")
+            return pd.DataFrame()
         
         predictions = pd.DataFrame()
         predictions['Home_Team'] = games_df['Home_Team']
