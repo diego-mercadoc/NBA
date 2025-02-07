@@ -86,6 +86,8 @@ Latest model metrics (as of January 26, 2025):
 - Added first half and first quarter predictions
 - Improved value rating calculations
 - Enhanced error handling and NaN value processing
+- Fixed prediction formatting to correctly display confidence values (e.g. "38.6%" instead of "3861.9%")
+- Improved rolling statistics handling for future games by using last available historical values
 - **XGBoost Early Stopping and Tuning Improvements:**  
   We have resolved previous errors by removing the unsupported `early_stopping_rounds` from the XGBoost constructor and instead passing it during the model fit. A manual parameter search using ParameterSampler and a fixed 80/20 train/validation split now ensures that XGBoost receives a valid, sequential eval_set for early stopping while preserving DataFrame feature names. Separate tuning is now performed for moneyline and totals models, with results stored under distinct keys ("xgboost_moneyline" and "xgboost_totals"). This update resolves both the "unhashable type: 'numpy.ndarray'" error and the "Must have at least 1 validation dataset" error.
 - Simplified totals prediction system:
@@ -266,6 +268,7 @@ See requirements.txt for a complete list of dependencies.
 - High confidence threshold (90%+) reduces number of picks
 - Value ratings strictly enforced (minimum 0.70)
 - A monkey-patch is applied in nba_predictor.py to handle scikit-learn compatibility (adds _support_missing_values to DecisionTreeClassifier)
+- Rolling statistics for future games are now filled using last available historical values to avoid zero-value features
 
 ### Development Roadmap
 

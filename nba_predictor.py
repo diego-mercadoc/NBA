@@ -147,6 +147,19 @@ class NBAPredictor:
                 rolling_stats['Point_Diff']
             )
             
+            # For Home games: if the mapping returns NaN (likely for future games), fill with the last available value
+            missing_home = df.loc[home_mask, 'Home_Points_Scored_Roll5'].isna()
+            if missing_home.any():
+                # Use the last available rolling value from historical games (if exists)
+                if not historical_team_games.empty:
+                    last_5_games = historical_team_games.tail(5)
+                    last_val_scored = last_5_games['Points_Scored'].mean()
+                    last_val_allowed = last_5_games['Points_Allowed'].mean()
+                    last_val_diff = last_5_games['Point_Diff'].mean()
+                    df.loc[home_mask & missing_home, 'Home_Points_Scored_Roll5'] = last_val_scored
+                    df.loc[home_mask & missing_home, 'Home_Points_Allowed_Roll5'] = last_val_allowed
+                    df.loc[home_mask & missing_home, 'Home_Point_Diff_Roll5'] = last_val_diff
+            
             # Map back to main DataFrame for away games
             away_mask = df['Away_Team'] == team
             df.loc[away_mask, 'Away_Points_Scored_Roll5'] = df.loc[away_mask, 'Date'].map(
@@ -158,6 +171,19 @@ class NBAPredictor:
             df.loc[away_mask, 'Away_Point_Diff_Roll5'] = df.loc[away_mask, 'Date'].map(
                 rolling_stats['Point_Diff']
             )
+            
+            # For Away games: if the mapping returns NaN (likely for future games), fill with the last available value
+            missing_away = df.loc[away_mask, 'Away_Points_Scored_Roll5'].isna()
+            if missing_away.any():
+                # Use the last available rolling value from historical games (if exists)
+                if not historical_team_games.empty:
+                    last_5_games = historical_team_games.tail(5)
+                    last_val_scored = last_5_games['Points_Scored'].mean()
+                    last_val_allowed = last_5_games['Points_Allowed'].mean()
+                    last_val_diff = last_5_games['Point_Diff'].mean()
+                    df.loc[away_mask & missing_away, 'Away_Points_Scored_Roll5'] = last_val_scored
+                    df.loc[away_mask & missing_away, 'Away_Points_Allowed_Roll5'] = last_val_allowed
+                    df.loc[away_mask & missing_away, 'Away_Point_Diff_Roll5'] = last_val_diff
         
         # Fill NaN values in rolling stats with team averages from historical games
         rolling_cols = [
@@ -253,11 +279,15 @@ class NBAPredictor:
         feature_cols = self.feature_columns
         X = df[feature_cols].fillna(0)
         
-        # Add debug logging
-        logging.info(f"\nFeature statistics for {len(df)} games:")
+        # Add debug logging for missing values and feature statistics
+        logging.info(f"\nFeature statistics and missing value analysis for {len(df)} games:")
         for col in feature_cols:
+            missing_pct = df[col].isna().mean() * 100
+            zero_pct = (df[col] == 0).mean() * 100
             stats = X[col].describe()
             logging.info(f"\n{col}:")
+            logging.info(f"  Missing values: {missing_pct:.1f}% (before fill)")
+            logging.info(f"  Zero values: {zero_pct:.1f}%")
             logging.info(f"  Mean: {stats['mean']:.3f}")
             logging.info(f"  Std: {stats['std']:.3f}")
             logging.info(f"  Min: {stats['min']:.3f}")
@@ -452,13 +482,13 @@ class NBAPredictor:
     
     def _format_prediction(self, row):
         """Format prediction row into readable string"""
-        home_prob = row['Home_Win_Prob'] * 100
-        away_prob = row['Away_Win_Prob'] * 100
+        home_prob = row['Home_Win_Prob']
+        away_prob = row['Away_Win_Prob']
         spread = row['Predicted_Spread']
         total = row['Predicted_Total']
         
         pick = f"{row['Home_Team']} ML" if row['Moneyline_Pick'] else f"{row['Away_Team']} ML"
-        confidence = row['Moneyline_Confidence'] * 100
+        confidence = row['Moneyline_Confidence']
         
         # Format quarter and half predictions
         first_half_total = row['First_Half_Total']

@@ -412,6 +412,21 @@
             ],
             "patch_location": "nba_predictor.py (top of file)",
             "alternative": "Upgrade to scikit-learn>=1.2.0"
+          },
+          "prediction_formatting": {
+            "status": "fixed",
+            "description": "Updated _format_prediction in nba_predictor.py to remove ×100 multiplication and modified feature preparation to fill missing rolling stats for future games using the last available historical values",
+            "resolution_date": "2025-02-06",
+            "resolution_type": "bugfix",
+            "affected_components": [
+              "_format_prediction",
+              "prepare_features"
+            ],
+            "changes": [
+              "Removed unnecessary ×100 multiplication from confidence values",
+              "Added fallback to last available historical values for rolling stats",
+              "Enhanced logging for missing and zero-value features"
+            ]
           }
         }
       },
