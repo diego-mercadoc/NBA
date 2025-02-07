@@ -401,32 +401,29 @@
               ]
             }
           },
-          "scikit_learn_compatibility": {
-            "status": "patched",
-            "description": "Monkey-patch added in nba_predictor.py to handle missing _support_missing_values attribute in DecisionTreeClassifier",
-            "resolution_date": "2025-02-06",
-            "resolution_type": "workaround",
-            "affected_components": [
-              "RandomForestClassifier",
-              "DecisionTreeClassifier"
-            ],
-            "patch_location": "nba_predictor.py (top of file)",
-            "alternative": "Upgrade to scikit-learn>=1.2.0"
-          },
           "prediction_formatting": {
             "status": "fixed",
-            "description": "Updated _format_prediction in nba_predictor.py to remove ×100 multiplication and modified feature preparation to fill missing rolling stats for future games using the last available historical values",
+            "description": "Removed the erroneous multiplication by 100 in _format_prediction in nba_predictor.py and updated rolling stat filling for future games.",
             "resolution_date": "2025-02-06",
-            "resolution_type": "bugfix",
             "affected_components": [
-              "_format_prediction",
-              "prepare_features"
+              "nba_predictor.py"
             ],
+            "resolution_type": "code change / fallback mechanism",
             "changes": [
-              "Removed unnecessary ×100 multiplication from confidence values",
-              "Added fallback to last available historical values for rolling stats",
+              "Fixed confidence value display (e.g. 38.6% instead of 3861.9%)",
+              "Added historical data loading for future game feature filling",
               "Enhanced logging for missing and zero-value features"
             ]
+          },
+          "scikit_learn_compatibility": {
+            "status": "patched",
+            "description": "Monkey-patch added in model_tuner.py to add __sklearn_tags__ to XGBClassifier.",
+            "resolution_date": "2025-02-06",
+            "affected_components": [
+              "model_tuner.py"
+            ],
+            "resolution_type": "monkey patch",
+            "details": "Added minimal __sklearn_tags__ method to XGBClassifier for compatibility with scikit-learn's clone() function"
           }
         }
       },

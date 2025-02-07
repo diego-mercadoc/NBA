@@ -2,6 +2,13 @@
 
 A Python-based NBA data scraper and prediction system that collects game data and generates betting insights using ensemble machine learning models.
 
+## Recent Updates
+
+**Recent Update (2025-02-06):**  
+- The moneyline confidence formatting in the predictions was fixed so that probabilities now display correctly (e.g. "38.6% confidence" instead of "3861.9% confidence").  
+- In addition, the feature preparation was updated so that for future games the missing rolling statistics are filled using historical averages loaded from nba_games_all.csv. This ensures that key features such as rolling points and totals are not left as zero or NaN.
+- Added monkey-patch in model_tuner.py to handle missing __sklearn_tags__ attribute in XGBClassifier for compatibility with scikit-learn's clone() function.
+
 ## Model Performance
 
 Latest model metrics (as of January 26, 2025):
@@ -79,22 +86,6 @@ Latest model metrics (as of January 26, 2025):
   - Streak impact (momentum adjusted)
   - Recent performance boost
   - Probability margin bonus
-
-## Recent Updates
-- Implemented data cutoff at October 18, 2022 for improved model stability
-- Enhanced feature engineering with interaction features
-- Added first half and first quarter predictions
-- Improved value rating calculations
-- Enhanced error handling and NaN value processing
-- Fixed prediction formatting to correctly display confidence values (e.g. "38.6%" instead of "3861.9%")
-- Improved rolling statistics handling for future games by using last available historical values
-- **XGBoost Early Stopping and Tuning Improvements:**  
-  We have resolved previous errors by removing the unsupported `early_stopping_rounds` from the XGBoost constructor and instead passing it during the model fit. A manual parameter search using ParameterSampler and a fixed 80/20 train/validation split now ensures that XGBoost receives a valid, sequential eval_set for early stopping while preserving DataFrame feature names. Separate tuning is now performed for moneyline and totals models, with results stored under distinct keys ("xgboost_moneyline" and "xgboost_totals"). This update resolves both the "unhashable type: 'numpy.ndarray'" error and the "Must have at least 1 validation dataset" error.
-- Simplified totals prediction system:
-  * Single XGBoost model with optimized hyperparameters
-  * Early stopping with validation set
-  * Enhanced feature engineering for better predictions
-  * Removed ensemble averaging to reduce complexity
 
 ## Development Roadmap
 1. **Data Quality & Storage** (In Progress)

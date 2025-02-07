@@ -84,8 +84,20 @@ class NBAPredictor:
         """Prepare features for ML models with enhanced engineering"""
         df = games_df.copy()
         
-        # Calculate win/loss columns for historical games only
+        # For feature engineering, we need historical games.
         historical_games = df[~df['Is_Future']].copy()
+        # If no historical data is present (e.g. when df contains only future games), try loading it from file.
+        if historical_games.empty:
+            try:
+                historical_games = pd.read_csv('nba_games_all.csv')
+                historical_games['Date'] = pd.to_datetime(historical_games['Date'])
+                # Ensure we work only with played games:
+                historical_games = historical_games[~historical_games['Is_Future']]
+                logging.info("Loaded historical games from nba_games_all.csv for feature filling.")
+            except Exception as e:
+                logging.warning("Could not load historical games for feature filling; proceeding with empty history.")
+                historical_games = pd.DataFrame()
+        
         historical_games['Home_Win'] = (historical_games['Home_Points'] > historical_games['Away_Points']).astype(int)
         historical_games['Away_Win'] = (historical_games['Away_Points'] > historical_games['Home_Points']).astype(int)
         

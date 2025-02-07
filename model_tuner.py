@@ -6,6 +6,12 @@ from sklearn.model_selection import RandomizedSearchCV, cross_val_score, train_t
 from sklearn.ensemble import RandomForestClassifier
 import lightgbm as lgb
 import xgboost as xgb
+
+# Monkey patch for XGBoost's XGBClassifier to handle missing __sklearn_tags__
+if not hasattr(xgb.XGBClassifier, '__sklearn_tags__'):
+    # Monkey patch to provide a minimal __sklearn_tags__ method
+    xgb.XGBClassifier.__sklearn_tags__ = lambda self: {}
+
 from sklearn.preprocessing import StandardScaler
 import joblib
 import os
@@ -84,9 +90,68 @@ class ModelTuner:
         with open('.cursorrules', 'r', encoding='utf-8') as f:
             self.config = json.load(f)
 
-        self.tuning_config = self.config['model_validation']['hyperparameter_tuning']
-        self.validation_periods = self.tuning_config['validation_periods']
-        self.optimization_metrics = self.tuning_config['optimization_metrics']
+        # Safely get the hyperparameter tuning configuration (using an empty dict if missing)
+        self.tuning_config = self.config.get('model_validation', {}).get('hyperparameter_tuning', {})
+        if not self.tuning_config:
+            logging.warning("No hyperparameter tuning configuration found in .cursorrules under 'model_validation'. Using default safe ranges.")
+            # Set default safe ranges for hyperparameters
+            self.tuning_config = {
+                'safe_ranges': {
+                    'random_forest': {
+                        'n_estimators': [450, 475, 500, 525, 550],
+                        'max_depth': [10, 11, 12, 13, 14],
+                        'min_samples_split': [2, 3, 4],
+                        'min_samples_leaf': [1, 2, 3]
+                    },
+                    'lightgbm': {
+                        'n_estimators': [250, 275, 300, 325, 350],
+                        'max_depth': [7, 8, 9],
+                        'learning_rate': [0.08, 0.09, 0.1, 0.11, 0.12],
+                        'num_leaves': [31, 63, 127],
+                        'min_child_samples': [20, 30, 50]
+                    },
+                    'xgboost': {
+                        'n_estimators': [250, 275, 300, 325, 350],
+                        'max_depth': [7, 8, 9],
+                        'learning_rate': [0.08, 0.09, 0.1, 0.11, 0.12],
+                        'min_child_weight': [1, 3, 5],
+                        'subsample': [0.8, 0.9, 1.0]
+                    }
+                },
+                'n_iterations': 50,
+                'cross_validation': {
+                    'folds': 5,
+                    'shuffle': True,
+                    'stratify': True
+                },
+                'early_stopping': {
+                    'enabled': True,
+                    'patience': 50,
+                    'min_delta': 0.001
+                },
+                'optimization_metrics': {
+                    'moneyline': 'accuracy',
+                    'spread': 'neg_root_mean_squared_error',
+                    'totals': 'neg_root_mean_squared_error'
+                },
+                'backup': {
+                    'save_best_models': True,
+                    'max_versions': 3,
+                    'performance_threshold': 0.02
+                }
+            }
+
+        # Safely get validation periods and optimization metrics
+        self.validation_periods = self.tuning_config.get('validation_periods', {
+            'primary': "2025-01-01/2025-01-26",
+            'secondary': "2024-12-01/2024-12-31",
+            'historical': "2023-01-01/2023-12-31"
+        })
+        self.optimization_metrics = self.tuning_config.get('optimization_metrics', {
+            'moneyline': 'accuracy',
+            'spread': 'neg_root_mean_squared_error',
+            'totals': 'neg_root_mean_squared_error'
+        })
 
         self.logger = logging.getLogger(__name__)
 
