@@ -287,17 +287,12 @@ class NBAPredictor:
         
         # Train base models separately
         logging.info("Training enhanced moneyline models...")
-        # TODO: Consider implementing a more robust cross-validation strategy (e.g., StratifiedKFold or GridSearchCV) to ensure no leakage in moneyline classifier training.
-        self.moneyline_model = VotingClassifier(
-            estimators=[
-                ('rf', self.rf_classifier),
-                ('lr', self.lr_classifier),
-                ('svm', self.svm_classifier)
-            ],
-            voting='soft',
-            weights=[2, 1, 1]
-        )
-        self.moneyline_model.fit(X_train_scaled, y_ml_train)
+        
+        # Train Random Forest
+        self.rf_classifier.fit(X_train_scaled, y_ml_train)
+        
+        # Train Logistic Regression
+        self.lr_classifier.fit(X_train_scaled, y_ml_train)
         
         # Train XGBoost
         self.xgb_classifier.fit(X_train_scaled, y_ml_train)
@@ -306,12 +301,13 @@ class NBAPredictor:
         self.lgb_classifier.fit(X_train_scaled, y_ml_train)
         
         # Get predictions from all models
-        sklearn_proba = self.moneyline_model.predict_proba(X_test_scaled)
+        rf_proba = self.rf_classifier.predict_proba(X_test_scaled)
+        lr_proba = self.lr_classifier.predict_proba(X_test_scaled)
         xgb_proba = self.xgb_classifier.predict_proba(X_test_scaled)
         lgb_proba = self.lgb_classifier.predict_proba(X_test_scaled)
         
         # Weighted average of probabilities
-        ensemble_proba = (2*sklearn_proba + 2*xgb_proba + 2*lgb_proba) / 6
+        ensemble_proba = (2*rf_proba + lr_proba + 2*xgb_proba + 2*lgb_proba) / 7
         y_ml_pred = (ensemble_proba[:, 1] > 0.5).astype(int)
         
         # Evaluate moneyline model
@@ -367,7 +363,8 @@ class NBAPredictor:
     
     def save_models(self):
         """Save trained models and scaler"""
-        joblib.dump(self.moneyline_model, 'models/moneyline_model.joblib')
+        joblib.dump(self.rf_classifier, 'models/rf_classifier.joblib')
+        joblib.dump(self.lr_classifier, 'models/lr_classifier.joblib')
         joblib.dump(self.spread_model, 'models/spread_model.joblib')
         joblib.dump(self.totals_model, 'models/totals_model.joblib')
         joblib.dump(self.scaler, 'models/scaler.joblib')
@@ -378,7 +375,8 @@ class NBAPredictor:
     def load_models(self):
         """Load trained models and scaler"""
         try:
-            self.moneyline_model = joblib.load('models/moneyline_model.joblib')
+            self.rf_classifier = joblib.load('models/rf_classifier.joblib')
+            self.lr_classifier = joblib.load('models/lr_classifier.joblib')
             self.spread_model = joblib.load('models/spread_model.joblib')
             self.totals_model = joblib.load('models/totals_model.joblib')
             self.scaler = joblib.load('models/scaler.joblib')
@@ -403,13 +401,14 @@ class NBAPredictor:
         predictions['Away_Team'] = games_df['Away_Team']
         predictions['Date'] = games_df['Date']
         
-        # Get predictions from all models
-        sklearn_proba = self.moneyline_model.predict_proba(X_scaled)
+        # Get predictions from each model separately
+        rf_proba = self.rf_classifier.predict_proba(X_scaled)
+        lr_proba = self.lr_classifier.predict_proba(X_scaled)
         xgb_proba = self.xgb_classifier.predict_proba(X_scaled)
         lgb_proba = self.lgb_classifier.predict_proba(X_scaled)
         
-        # Weighted average of probabilities
-        ensemble_proba = (2*sklearn_proba + 2*xgb_proba + 2*lgb_proba) / 6
+        # Weighted average of probabilities (removed SVM due to compatibility)
+        ensemble_proba = (2*rf_proba + lr_proba + 2*xgb_proba + 2*lgb_proba) / 7
         predictions['Home_Win_Prob'] = ensemble_proba[:, 1]
         predictions['Away_Win_Prob'] = ensemble_proba[:, 0]
         predictions['Moneyline_Pick'] = (predictions['Home_Win_Prob'] > 0.5).astype(int)
@@ -610,28 +609,74 @@ class NBAPredictor:
         """Perform time-aware cross-validation for the moneyline classifier using TimeSeriesSplit."""
         from sklearn.model_selection import TimeSeriesSplit
         from sklearn.metrics import accuracy_score
+        
+        # Convert y to numpy array if it's a pandas Series
+        if isinstance(y, pd.Series):
+            y = y.to_numpy()
+        
         tscv = TimeSeriesSplit(n_splits=n_splits)
         fold_accuracies = []
         fold = 1
+        
         for train_idx, test_idx in tscv.split(X):
             X_train_cv, X_test_cv = X[train_idx], X[test_idx]
             y_train_cv, y_test_cv = y[train_idx], y[test_idx]
-            # Create a new VotingClassifier instance with the same parameters
-            model = VotingClassifier(
-                estimators=[
-                    ('rf', self.rf_classifier),
-                    ('lr', self.lr_classifier),
-                    ('svm', self.svm_classifier)
-                ],
-                voting='soft',
-                weights=[2, 1, 1]
+            
+            # Train each model separately
+            rf_model = RandomForestClassifier(
+                n_estimators=500,
+                max_depth=12,
+                min_samples_split=5,
+                min_samples_leaf=2,
+                random_state=42
             )
-            model.fit(X_train_cv, y_train_cv)
-            y_pred_cv = model.predict(X_test_cv)
+            
+            lr_model = LogisticRegression(
+                C=0.8,
+                max_iter=2000,
+                class_weight='balanced',
+                random_state=42
+            )
+            
+            xgb_model = xgb.XGBClassifier(
+                n_estimators=300,
+                max_depth=8,
+                learning_rate=0.03,
+                subsample=0.8,
+                colsample_bytree=0.8,
+                random_state=42
+            )
+            
+            lgb_model = lgb.LGBMClassifier(
+                n_estimators=300,
+                max_depth=8,
+                learning_rate=0.03,
+                subsample=0.8,
+                colsample_bytree=0.8,
+                random_state=42
+            )
+            
+            # Train models
+            rf_model.fit(X_train_cv, y_train_cv)
+            lr_model.fit(X_train_cv, y_train_cv)
+            xgb_model.fit(X_train_cv, y_train_cv)
+            lgb_model.fit(X_train_cv, y_train_cv)
+            
+            # Get predictions
+            rf_proba = rf_model.predict_proba(X_test_cv)
+            lr_proba = lr_model.predict_proba(X_test_cv)
+            xgb_proba = xgb_model.predict_proba(X_test_cv)
+            lgb_proba = lgb_model.predict_proba(X_test_cv)
+            
+            # Weighted average of probabilities
+            ensemble_proba = (2*rf_proba + lr_proba + 2*xgb_proba + 2*lgb_proba) / 7
+            y_pred_cv = (ensemble_proba[:, 1] > 0.5).astype(int)
+            
             acc = accuracy_score(y_test_cv, y_pred_cv)
             fold_accuracies.append(acc)
             logging.info(f"Fold {fold} Moneyline CV Accuracy: {acc:.3f}")
             fold += 1
+            
         mean_acc = np.mean(fold_accuracies)
         logging.info(f"Mean Time-Aware Moneyline CV Accuracy: {mean_acc:.3f}")
         return fold_accuracies 
