@@ -168,9 +168,38 @@ def main():
                 min_value_rating=0.70      # Added minimum value rating
             )
 
-            # Filter predictions for January 27, 2025
-            prediction_date = pd.Timestamp('January 27, 2025') # Naive prediction_date
+            # Filter predictions for February 10, 2025 (changed from January 27)
+            prediction_date = pd.Timestamp('February 10, 2025')
             filtered_predictions = predictions[pd.to_datetime(predictions['Date']).dt.date == prediction_date.date()]
+
+            # Show ALL predictions for February 10, 2025
+            logging.info("\nALL Predictions for February 10, 2025:")
+            if not filtered_predictions.empty:
+                for _, pred in filtered_predictions.iterrows():
+                    logging.info("\n" + "="*50)
+                    logging.info(f"Game: {pred['Away_Team']} @ {pred['Home_Team']}")
+                    logging.info(f"Date: {pred['Date']}")
+                    logging.info("\nMoneyline Predictions:")
+                    logging.info(f"Home Win Probability: {pred['Home_Win_Prob']*100:.1f}%")
+                    logging.info(f"Away Win Probability: {pred['Away_Win_Prob']*100:.1f}%")
+                    logging.info(f"Confidence: {pred['Moneyline_Confidence']*100:.1f}%")
+                    
+                    logging.info("\nSpread Predictions:")
+                    logging.info(f"Predicted Spread: {pred['Home_Team']} {pred['Predicted_Spread']:+.1f}")
+                    
+                    logging.info("\nTotals Predictions:")
+                    logging.info(f"Full Game Total: {pred['Predicted_Total']:.1f}")
+                    logging.info(f"First Half Total: {pred['First_Half_Total']:.1f}")
+                    logging.info(f"First Quarter Total: {pred['First_Quarter_Total']:.1f}")
+                    
+                    logging.info("\nHalf/Quarter Spreads:")
+                    logging.info(f"First Half Spread: {pred['Home_Team']} {pred['First_Half_Spread']:+.1f}")
+                    logging.info(f"First Quarter Spread: {pred['Home_Team']} {pred['First_Quarter_Spread']:+.1f}")
+                    
+                    if 'Value_Rating' in pred:
+                        logging.info(f"\nValue Rating: {pred['Value_Rating']:.3f}")
+            else:
+                logging.info("No games scheduled for February 10, 2025")
 
             # Add Game column to predictions if it doesn't exist
             if 'Game' not in predictions.columns:
@@ -187,7 +216,7 @@ def main():
                 logging.info(f"\n{pred}")
 
             if not best_bets.empty:
-                logging.info("\nHigh Confidence Bets (90%+ confidence) for January 27, 2025:")
+                logging.info("\nHigh Confidence Bets (90%+ confidence) for February 10, 2025:")
                 for _, bet in best_bets.iterrows():
                     logging.info(
                         f"\n{bet['Game']}: {bet['Bet_Type']} - {bet['Prediction']}"
