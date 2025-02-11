@@ -172,30 +172,56 @@ def main():
                 logging.info("No predictions returned (empty DataFrame). Skipping best_bets calculation.")
                 return
 
-            # Get best bets with stricter criteria
-            best_bets = predictor.get_best_bets(
-                predictions,
-                confidence_threshold=0.90,  # Increased from 0.65
-                min_value_rating=0.70      # Added minimum value rating
-            )
-
-            # Filter predictions for February 10, 2025
-            prediction_date = pd.Timestamp('February 10, 2025') # Naive prediction_date
+            # Filter predictions for February 11, 2025
+            prediction_date = pd.Timestamp('February 11, 2025') # Naive prediction_date
             filtered_predictions = predictions[pd.to_datetime(predictions['Date']).dt.date == prediction_date.date()]
 
             # Add Game column to predictions if it doesn't exist
             if 'Game' not in predictions.columns:
                 predictions['Game'] = predictions.apply(lambda x: f"{x['Away_Team']} @ {x['Home_Team']}", axis=1)
 
+            logging.info("\nAll Predictions for February 11, 2025:")
+            for _, pred in filtered_predictions.iterrows():
+                game = f"{pred['Away_Team']} @ {pred['Home_Team']}"
+                logging.info(f"\nGame: {game}")
+                
+                # Moneyline prediction
+                if 'Moneyline_Prediction' in pred:
+                    winner = pred['Home_Team'] if pred['Moneyline_Prediction'] == 1 else pred['Away_Team']
+                    logging.info(f"Moneyline: {winner} to win (Confidence: {pred['Moneyline_Confidence']*100:.1f}%)")
+                
+                # Spread prediction
+                if 'Spread_Prediction' in pred:
+                    logging.info(f"Spread: {pred['Spread_Prediction']:.1f} (Confidence: {pred['Spread_Confidence']*100:.1f}%)")
+                
+                # Total points prediction
+                if 'Total_Points_Prediction' in pred:
+                    logging.info(f"Total Points: {pred['Total_Points_Prediction']:.1f} (Confidence: {pred['Total_Points_Confidence']*100:.1f}%)")
+                
+                # First half total prediction
+                if 'First_Half_Total_Prediction' in pred:
+                    logging.info(f"First Half Total: {pred['First_Half_Total_Prediction']:.1f} (Confidence: {pred['First_Half_Total_Confidence']*100:.1f}%)")
+                
+                # First quarter total prediction
+                if 'First_Quarter_Total_Prediction' in pred:
+                    logging.info(f"First Quarter Total: {pred['First_Quarter_Total_Prediction']:.1f} (Confidence: {pred['First_Quarter_Total_Confidence']*100:.1f}%)")
+                
+                # Value rating if available
+                if 'Value_Rating' in pred:
+                    logging.info(f"Value Rating: {pred['Value_Rating']:.3f}")
+
+            # Continue with best bets section for high confidence picks
+            best_bets = predictor.get_best_bets(
+                predictions,
+                confidence_threshold=0.90,  # Increased from 0.65
+                min_value_rating=0.70      # Added minimum value rating
+            )
+
             # Only filter best bets if we have any
             if not best_bets.empty:
                 filtered_best_bets = best_bets[best_bets['Game'].isin(predictions['Game'])]
             else:
                 filtered_best_bets = pd.DataFrame(columns=["Game", "Bet_Type", "Prediction", "Confidence", "Value_Rating"])
-
-            logging.info("\nPredictions for today's games:")
-            for pred in predictions['Formatted_Predictions']:
-                logging.info(f"\n{pred}")
 
             if not best_bets.empty:
                 logging.info("\nHigh Confidence Bets (90%+ confidence) for February 10, 2025:")
