@@ -179,8 +179,8 @@ def main():
                 min_value_rating=0.70      # Added minimum value rating
             )
 
-            # Filter predictions for January 27, 2025
-            prediction_date = pd.Timestamp('January 27, 2025') # Naive prediction_date
+            # Filter predictions for February 10, 2025
+            prediction_date = pd.Timestamp('February 10, 2025') # Naive prediction_date
             filtered_predictions = predictions[pd.to_datetime(predictions['Date']).dt.date == prediction_date.date()]
 
             # Add Game column to predictions if it doesn't exist
@@ -198,7 +198,7 @@ def main():
                 logging.info(f"\n{pred}")
 
             if not best_bets.empty:
-                logging.info("\nHigh Confidence Bets (90%+ confidence) for January 27, 2025:")
+                logging.info("\nHigh Confidence Bets (90%+ confidence) for February 10, 2025:")
                 for _, bet in best_bets.iterrows():
                     logging.info(
                         f"\n{bet['Game']}: {bet['Bet_Type']} - {bet['Prediction']}"
